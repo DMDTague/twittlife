@@ -1,0 +1,379 @@
+@import "tailwindcss";
+
+@theme {
+  /* === Twitter/X Authentic Dark Theme === */
+  --color-x-bg: #000000;
+  --color-x-surface: #16181C;
+  --color-x-elevated: #1D1F23;
+  --color-x-border: #2F3336;
+  --color-x-border-light: #38444D;
+  --color-x-text-primary: #E7E9EA;
+  --color-x-text-secondary: #71767B;
+  --color-x-text-tertiary: #536471;
+  --color-x-accent: #1D9BF0;
+  --color-x-accent-hover: #1A8CD8;
+  --color-x-green: #00BA7C;
+  --color-x-pink: #F91880;
+  --color-x-orange: #FF7A00;
+  --color-x-purple: #7856FF;
+  --color-x-red: #F4212E;
+  --color-x-yellow: #FFD400;
+
+  /* Game-specific overlays */
+  --color-aura-glow: #1D9BF0;
+  --color-danger-glow: #F4212E;
+  --color-credit-gold: #FFD400;
+}
+
+body {
+  background-color: var(--color-x-bg);
+  color: var(--color-x-text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* === Utility Classes === */
+.hover-animation {
+  transition: background-color 0.2s, color 0.2s;
+}
+
+/* Tweet action hover rings */
+.action-reply:hover {
+  color: #1D9BF0;
+}
+
+.action-reply:hover .action-icon {
+  background-color: rgba(29, 155, 240, 0.1);
+}
+
+.action-retweet:hover {
+  color: #00BA7C;
+}
+
+.action-retweet:hover .action-icon {
+  background-color: rgba(0, 186, 124, 0.1);
+}
+
+.action-retweet.active {
+  color: #00BA7C;
+}
+
+.action-retweet.active svg {
+  stroke-width: 2.5px;
+}
+
+.action-like:hover {
+  color: #F91880;
+}
+
+.action-like:hover .action-icon {
+  background-color: rgba(249, 24, 128, 0.1);
+}
+
+.action-like.active {
+  color: #F91880;
+}
+
+.action-like.active svg {
+  fill: #F91880;
+}
+
+.action-views:hover {
+  color: #1D9BF0;
+}
+
+.action-views:hover .action-icon {
+  background-color: rgba(29, 155, 240, 0.1);
+}
+
+/* Reply connector line */
+.reply-connector {
+  position: relative;
+}
+
+.reply-connector::before {
+  content: '';
+  position: absolute;
+  left: 35px;
+  top: 60px;
+  bottom: -4px;
+  width: 2px;
+  background-color: #333639;
+}
+
+/* Nav pill hover */
+.nav-pill {
+  transition: background-color 0.2s;
+  border-radius: 9999px;
+  padding: 12px;
+}
+
+.nav-pill:hover {
+  background-color: rgba(231, 233, 234, 0.1);
+}
+
+/* Compose character ring */
+.char-ring {
+  transition: stroke-dashoffset 0.15s ease;
+}
+
+/* Tab underline */
+.tab-active {
+  position: relative;
+}
+
+.tab-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 56px;
+  height: 4px;
+  border-radius: 2px;
+  background-color: #1D9BF0;
+}
+
+/* Tweet hover */
+.tweet-hover:hover {
+  background-color: rgba(231, 233, 234, 0.03);
+}
+
+/* Sticky header blur */
+.sticky-header {
+  backdrop-filter: blur(12px);
+  background-color: rgba(0, 0, 0, 0.65);
+}
+
+/* Premium scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2F3336;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #71767B;
+}
+
+/* === Game Element Styles (blending with X aesthetic) === */
+.aura-badge {
+  background: linear-gradient(135deg, rgba(29, 155, 240, 0.15), rgba(120, 87, 255, 0.15));
+  border: 1px solid rgba(29, 155, 240, 0.3);
+  border-radius: 9999px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pulse-banner {
+  background: linear-gradient(90deg, rgba(29, 155, 240, 0.1), rgba(120, 87, 255, 0.1));
+  border-bottom: 1px solid #2F3336;
+}
+
+.game-card {
+  background-color: #16181C;
+  border: 1px solid #2F3336;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Trending card */
+.trend-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.trend-item:hover {
+  background-color: rgba(231, 233, 234, 0.03);
+}
+
+/* Who to follow */
+.follow-card {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.follow-card:hover {
+  background-color: rgba(231, 233, 234, 0.03);
+}
+
+/* === Animations === */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slideDown {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes heartPop {
+  0% {
+    transform: scale(1);
+  }
+
+  25% {
+    transform: scale(1.3);
+  }
+
+  50% {
+    transform: scale(0.95);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-heart {
+  animation: heartPop 0.35s ease-out;
+}
+
+@keyframes aura-glow {
+
+  0%,
+  100% {
+    text-shadow: 0 0 10px currentColor;
+  }
+
+  50% {
+    text-shadow: 0 0 25px currentColor, 0 0 50px currentColor;
+  }
+}
+
+.aura-glow {
+  animation: aura-glow 2s ease-in-out infinite;
+}
+
+/* Glitch effects (game mechanic) */
+@keyframes glitch-horizontal {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  10% {
+    transform: translateX(-2px);
+  }
+
+  20% {
+    transform: translateX(2px);
+  }
+
+  50% {
+    transform: translateX(-3px);
+    filter: hue-rotate(90deg);
+  }
+
+  70% {
+    transform: translateX(-2px);
+    filter: hue-rotate(0deg);
+  }
+}
+
+@keyframes glitch-text {
+
+  0%,
+  100% {
+    text-shadow: none;
+  }
+
+  10% {
+    text-shadow: -2px 0 #ff0000, 2px 0 #00ff00;
+  }
+
+  20% {
+    text-shadow: 2px 0 #ff0000, -2px 0 #0000ff;
+  }
+
+  50% {
+    text-shadow: -1px 0 #ff0000, 1px 0 #00ff00, 0 1px #0000ff;
+  }
+
+  80% {
+    text-shadow: none;
+  }
+}
+
+.glitch-active {
+  animation: glitch-horizontal 0.3s ease-in-out infinite;
+}
+
+.glitch-text {
+  animation: glitch-text 0.8s ease-in-out infinite;
+}
+
+@keyframes sparkline-draw {
+  from {
+    stroke-dashoffset: 500;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.sparkline-path {
+  stroke-dasharray: 500;
+  animation: sparkline-draw 1.5s ease-out forwards;
+}
+/* === Phase 24.5: Avatar Extensions === */
+.hexagon-clip {
+  clip-path: polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
+}
+
+.aura-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  pointer-events: none;
+  transition: all 0.5s ease;
+}
+
+.aura-ring-gold {
+  border-color: #FFD400;
+  box-shadow: 0 0 10px rgba(255, 212, 0, 0.4);
+}
+
+.aura-ring-red {
+  border-color: #F4212E;
+  box-shadow: 0 0 10px rgba(244, 33, 46, 0.4);
+}
