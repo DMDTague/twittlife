@@ -866,6 +866,9 @@ def post_tweet(req: PostTweetRequest, background_tasks: BackgroundTasks):
     # Randomly step game logic
     engine.trigger_global_event_injector()
     
+    # CRITICAL: Persist tweets to database immediately so they survive page refresh
+    save_state_to_db()
+    
     return {
         "status": "success",
         "event_id": new_event.id,
