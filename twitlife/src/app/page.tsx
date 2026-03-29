@@ -142,7 +142,13 @@ export default function TwitLife() {
 
   const verifyIdentity = async (handle: string) => {
     try {
-      const resp = await fetch(`${API}/api/timeline?entity_id=${handle}`);
+      const resp = await fetch(`${API}/api/timeline?entity_id=${handle}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      });
       if (resp.ok) {
         setIdentity({ handle, name: handle, desc: "" });
       } else {
@@ -163,7 +169,13 @@ export default function TwitLife() {
     const fetchTimeline = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${API}/api/timeline?entity_id=${identity.handle}`);
+        const res = await fetch(`${API}/api/timeline?entity_id=${identity.handle}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          }
+        });
         if (res.status === 404) {
           console.error("Identity not found in backend. Resetting session.");
           localStorage.removeItem("twitlife_identity");
@@ -204,7 +216,10 @@ export default function TwitLife() {
 
     fetchTimeline();
 
-    const wsUrl = "ws://127.0.0.1:8000/ws/timeline";
+    // Fixed: Use production WebSocket URL instead of localhost
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = API.replace('https://', '').replace('http://', '');
+    const wsUrl = `${protocol}//${host}/ws/timeline`;
     const ws = new WebSocket(wsUrl);
     ws.onmessage = (event) => {
       try {
@@ -267,13 +282,13 @@ export default function TwitLife() {
 
   useEffect(() => {
     if (!identity) return;
-    const f = async () => { try { const r = await fetch(`${API}/api/trending`); const d = await r.json(); setTrending(d.trending || []); } catch { } };
+    const f = async () => { try { const r = await fetch(`${API}/api/trending`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' } }); const d = await r.json(); setTrending(d.trending || []); } catch { } };
     f(); const i = setInterval(f, 30000); return () => { clearInterval(i); };
   }, [identity]);
 
   useEffect(() => {
     if (!identity) return;
-    const f = async () => { try { const r = await fetch(`${API}/api/active_pulse`); const d = await r.json(); setActivePulse(d.active_pulse); } catch { } };
+    const f = async () => { try { const r = await fetch(`${API}/api/active_pulse`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' } }); const d = await r.json(); setActivePulse(d.active_pulse); } catch { } };
     f(); const i = setInterval(f, 15000); return () => { clearInterval(i); };
   }, [identity]);
 
@@ -282,7 +297,13 @@ export default function TwitLife() {
     if (!identity) return;
     const f = async () => { 
       try { 
-        const r = await fetch(`${API}/api/world_state`); 
+        const r = await fetch(`${API}/api/world_state`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          }
+        }); 
         const d = await r.json(); 
         setWorldState(d);
         setHaterWinterActive(d.world_events?.hater_winter?.active || false);
@@ -295,25 +316,37 @@ export default function TwitLife() {
 
   useEffect(() => {
     if (!identity || activeTab !== 'Notifications') return;
-    const f = async () => { try { const r = await fetch(`${API}/api/notifications?entity_id=${identity.handle}`); const d = await r.json(); setNotifications(d.notifications || []); } catch { } };
+    const f = async () => { 
+      try { 
+        const r = await fetch(`${API}/api/notifications?entity_id=${identity.handle}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          }
+        }); 
+        const d = await r.json(); 
+        setNotifications(d.notifications || []); 
+      } catch { } 
+    };
     f(); const i = setInterval(f, 10000); return () => { clearInterval(i); };
   }, [identity, activeTab]);
 
   useEffect(() => {
     if (!identity || activeTab !== 'Messages') return;
-    const f = async () => { try { const r = await fetch(`${API}/api/messages?entity_id=${identity.handle}`); const d = await r.json(); setMessages(d.messages || []); } catch { } };
+    const f = async () => { try { const r = await fetch(`${API}/api/messages?entity_id=${identity.handle}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' } }); const d = await r.json(); setMessages(d.messages || []); } catch { } };
     f(); const i = setInterval(f, 10000); return () => clearInterval(i);
   }, [identity, activeTab]);
 
   useEffect(() => {
     if (!identity || activeTab !== 'Profile') return;
-    const f = async () => { try { const r = await fetch(`${API}/api/profile/${identity.handle}`); const d = await r.json(); setPlayerProfile(d); } catch { } };
+    const f = async () => { try { const r = await fetch(`${API}/api/profile/${identity.handle}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' } }); const d = await r.json(); setPlayerProfile(d); } catch { } };
     f();
   }, [identity, activeTab]);
 
   const fetchNeighborhood = useCallback(async (name: string) => {
     setSelectedHood(name); setLoading(true);
-    try { const r = await fetch(`${API}/api/neighborhood/${encodeURIComponent(name)}`); const d = await r.json(); setNeighborhoodFeed(d.feed || []); setHoodDesc(d.hub_description || ""); } catch { }
+    try { const r = await fetch(`${API}/api/neighborhood/${encodeURIComponent(name)}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' } }); const d = await r.json(); setNeighborhoodFeed(d.feed || []); setHoodDesc(d.hub_description || ""); } catch { }
     setLoading(false);
   }, []);
 
