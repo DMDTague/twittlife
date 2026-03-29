@@ -228,8 +228,8 @@ class PostTweetRequest(BaseModel):
     content: str
     visibility: str = "Public"
     target_ids: List[str] = []
-    reply_to_id: str = None
-    media_url: str = None
+    reply_to_id: Optional[str] = None
+    media_url: Optional[str] = None
 
 @app.get("/api/timeline")
 def get_timeline(entity_id: str = "player_1"):

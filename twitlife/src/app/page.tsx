@@ -400,13 +400,19 @@ export default function TwitLife() {
         body: JSON.stringify({ initiator_id: identity?.handle, content: tempPost.content, media_url: tempMediaUrl }) 
       });
       const data = await response.json();
+      if (!response.ok) {
+        console.error("[POST_TWEET_ERROR]", response.status, data);
+        setPostStatus("error");
+        return;
+      }
       setPostStatus("success"); 
       
       // Phase 27: Emit stat float for +Aura on success
       if (data.tier_progress !== undefined) {
         addStatFloat('+10 Aura', '#1D9BF0');
       }
-    } catch { 
+    } catch (e) { 
+      console.error("[POST_TWEET_EXCEPTION]", e);
       setPostStatus("error"); 
     }
     setTimeout(() => { setPostStatus(null); }, 3000);
