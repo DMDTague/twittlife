@@ -1073,7 +1073,7 @@ export default function TwitLife() {
                 <p className="text-[11px] text-[#7856FF]/80 mt-0.5">Topic reach multipliers randomized. Adapt or get buried.</p>
                 {Object.keys(algorithmMultipliers).length > 0 && (
                   <p className="text-[10px] text-[#7856FF]/60 mt-1">
-                    {Object.entries(algorithmMultipliers).slice(0, 3).map(([topic, mult]) => `${topic}: ${mult.toFixed(1)}x`).join(' • ')}
+                    {Object.entries(algorithmMultipliers).slice(0, 3).map(([topic, mult]) => `${topic}: ${(mult as number).toFixed(1)}x`).join(' • ')}
                   </p>
                 )}
               </div>
