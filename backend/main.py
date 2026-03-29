@@ -4,6 +4,7 @@ from pydantic import BaseModel
 import uuid
 import asyncio
 import random
+import time
 from typing import List, Optional
 
 from models import GameState, Entity, Event, TraitMatrix
@@ -778,7 +779,24 @@ def update_settings(req: SettingsRequest):
 def post_tweet(req: PostTweetRequest, background_tasks: BackgroundTasks):
     """
     Process a new post and run the engine loop.
+    NEW: Includes deplatforming checks, auto-replies, and tier progression.
     """
+    # Get player entity
+    player = state.entities.get(req.initiator_id)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    
+    # PHASE 27: Check deplatforming condition before posting
+    if engine.check_deplatform_condition(player):
+        reason = "Toxicity Fatigue reached 100%" if player.toxicity_fatigue >= 100 else "Failed 3 Crucibles"
+        deplatform_event = engine.trigger_deplatforming(player, reason)
+        return {
+            "status": "deplatformed",
+            "reason": reason,
+            "legacy_bonus_aura": player.legacy_aura_bonus,
+            "legacy_bonus_wealth": player.generational_wealth
+        }
+    
     # 1. Analyze the hidden vibe / metadata of the tweet before processing
     impact_vectors = engine.analyze_tweet_vibe(req.content)
     
@@ -792,17 +810,30 @@ def post_tweet(req: PostTweetRequest, background_tasks: BackgroundTasks):
         target_ids=req.target_ids,
         impact_vectors=impact_vectors,
         reply_to_id=req.reply_to_id,
-        media_url=req.media_url
+        media_url=req.media_url,
+        timestamp=time.time()
     )
     engine.process_action(new_event)
     
+    # PHASE 27: Tier progression check
+    from gamification import check_tier_progression
+    check_tier_progression(player)
+    
+    # PHASE 27: Simulate daily NPC evolution (happens on post)
+    engine.simulate_daily_npc_evolution()
+    
     # Phase 23: Update alliance score if this is a DM to a Titan
     if event_type == "dm" and req.target_ids:
-        player = state.entities.get(req.initiator_id)
         if player:
             for tid in req.target_ids:
                 engine.update_alliance_score(player, tid, req.content)
 
+    # PHASE 27: Generate auto-replies from haters/lovers based on relationships
+    async def generate_auto_replies_task(trigger_event):
+        auto_reply_events = engine.generate_auto_replies(trigger_event, player)
+        for auto_reply in auto_reply_events:
+            engine.process_action(auto_reply)
+            print(f"[AUTO-REPLY] {state.entities[auto_reply.initiator_id].name} auto-replied to {player.name}")
     
     # Trigger LLM responses from NPCs based on the new event
     # We run this in a background task so the frontend UI doesn't hang waiting for the LLM API to return
@@ -821,13 +852,20 @@ def post_tweet(req: PostTweetRequest, background_tasks: BackgroundTasks):
                 reaction = engine.generate_npc_reaction(npc_id, trigger_event)
                 if reaction:
                     engine.process_action(reaction)
-                    
+    
+    # Run both auto-replies and AI reactions
+    background_tasks.add_task(generate_auto_replies_task, new_event)
     background_tasks.add_task(trigger_ai_reactions, new_event)
     
     # Randomly step game logic
     engine.trigger_global_event_injector()
     
-    return {"status": "success", "event_id": new_event.id}
+    return {
+        "status": "success",
+        "event_id": new_event.id,
+        "tier_progress": getattr(player, 'tier_progress', 0),
+        "account_tier": getattr(player, 'account_tier', 'guest')
+    }
     
 @app.get("/api/prompt/{entity_id}")
 def get_prompt(entity_id: str):
@@ -1267,4 +1305,299 @@ def admin_export_state():
         "player_report": player_report,
         "api_usage": rate_stats
     }
+
+# --- PHASE 27: World Events & God Mode (BitLife Systems) ---
+
+class WorldEventRequest(BaseModel):
+    player_id: str = "player_1"
+    event_type: str  # "hater_winter" or "algorithm_shift"
+
+@app.post("/api/world_events/trigger")
+def trigger_world_event(req: WorldEventRequest):
+    """
+    Triggers a world event that affects all NPCs.
+    - hater_winter: 7-day period where NPCs are 50% more hostile
+    - algorithm_shift: Randomize which topics get algorithmic boost/shadowban
+    """
+    player = state.entities.get(req.player_id)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    
+    if req.event_type == "hater_winter":
+        success = engine.trigger_hater_winter(duration_days=7)
+        if success:
+            return {
+                "status": "success",
+                "event": "hater_winter",
+                "message": "❄️ HATER WINTER BEGINS! The entire network becomes 50% more hostile for 7 days.",
+                "active_world_events": engine.active_world_events
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Hater Winter is already active or RNG didn't trigger."
+            }
+    
+    elif req.event_type == "algorithm_shift":
+        winners, losers = engine.trigger_algorithmic_shift()
+        return {
+            "status": "success",
+            "event": "algorithm_shift",
+            "message": "🔀 ALGORITHM SHIFTED! Topic reach multipliers have been randomized.",
+            "winners": winners,
+            "losers": losers,
+            "active_world_events": engine.active_world_events
+        }
+    
+    else:
+        raise HTTPException(status_code=400, detail="Unknown event type")
+
+@app.get("/api/world_state")
+def get_world_state():
+    """
+    Returns active world events and their modifiers.
+    """
+    player = state.entities.get("player_1")
+    
+    hater_winter_status = {
+        "active": engine.hater_winter_active,
+        "days_remaining": max(0, engine.hater_winter_end_day - engine.current_day) if engine.hater_winter_active else 0,
+        "heat_multiplier": engine.get_hater_winter_heat_multiplier()
+    }
+    
+    algo_shifts = {
+        "active": len(engine.algorithmic_topic_multipliers) > 0,
+        "topic_multipliers": engine.algorithmic_topic_multipliers
+    }
+    
+    return {
+        "status": "success",
+        "current_day": engine.current_day,
+        "simulation_era": engine.simulation_era,
+        "world_events": {
+            "hater_winter": hater_winter_status,
+            "algorithm_shift": algo_shifts
+        },
+        "player_stats": {
+            "aura": getattr(player, 'aura', 0) if player else 0,
+            "wealth": getattr(player, 'wealth', 0) if player else 0,
+            "heat": getattr(player, 'heat', 0) if player else 0,
+            "toxicity_fatigue": getattr(player, 'toxicity_fatigue', 0) if player else 0
+        }
+    }
+
+# --- God Mode: Propaganda Machine & Psychological Warfare ---
+
+class GodModeActionRequest(BaseModel):
+    player_id: str = "player_1"
+    action_type: str  # "propaganda_machine", "reveal_truth", "edit_truth", "leak_dm"
+    target_id: str = None
+    custom_message: str = None
+    belief_key: str = None
+    old_word: str = None
+    new_word: str = None
+
+@app.post("/api/god_mode/action")
+def god_mode_action(req: GodModeActionRequest):
+    """
+    Execute god mode actions that cost Aura and have lasting consequences.
+    - propaganda_machine: 50 Wealth; Force NPC to post custom message for 24h
+    - reveal_truth: 100 Aura; View NPC's internal beliefs and system prompt
+    - edit_truth: 200 Aura; Permanently rewrite one belief by changing a word
+    - leak_dm: 150 Aura; Trigger a Crucible event on target
+    """
+    player = state.entities.get(req.player_id)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    
+    target = state.entities.get(req.target_id) if req.target_id else None
+    
+    # --- ACTION 1: Propaganda Machine (50 Wealth) ---
+    if req.action_type == "propaganda_machine":
+        if not target:
+            raise HTTPException(status_code=404, detail="Target NPC not found")
+        
+        if player.wealth < 50:
+            return {
+                "status": "error",
+                "message": f"Insufficient Wealth! Need 50, you have {player.wealth}",
+                "cost": 50,
+                "currency": "Wealth"
+            }
+        
+        player.wealth -= 50
+        result = engine.propaganda_machine(player, target.id, req.custom_message)
+        
+        if result:
+            return {
+                "status": "success",
+                "action": "propaganda_machine",
+                "cost_paid": 50,
+                "message": f"✅ Propaganda machine deployed! {target.name} will post: '{req.custom_message}' for the next 24 hours.",
+                "target_id": target.id,
+                "target_name": target.name
+            }
+    
+    # --- ACTION 2: Reveal Truth (100 Aura) ---
+    elif req.action_type == "reveal_truth":
+        if not target:
+            raise HTTPException(status_code=404, detail="Target NPC not found")
+        
+        if player.aura < 100:
+            return {
+                "status": "error",
+                "message": f"Insufficient Aura! Need 100, you have {player.aura}",
+                "cost": 100,
+                "currency": "Aura"
+            }
+        
+        player.aura -= 100
+        
+        return {
+            "status": "success",
+            "action": "reveal_truth",
+            "cost_paid": 100,
+            "message": f"🔍 Internal truth of {target.name} revealed:",
+            "target_name": target.name,
+            "internal_truth": target.internal_truth,
+            "system_prompt_hint": str(target.system_prompt_lock[:200]) + "..." if target.system_prompt_lock else "None",
+            "faction_tags": target.faction_tags,
+            "trait_matrix": {
+                "hostility": target.trait_matrix.hostility,
+                "politics": target.trait_matrix.politics,
+                "tone": target.trait_matrix.tone
+            }
+        }
+    
+    # --- ACTION 3: Edit Truth (200 Aura) ---
+    elif req.action_type == "edit_truth":
+        if not target:
+            raise HTTPException(status_code=404, detail="Target NPC not found")
+        
+        if player.aura < 200:
+            return {
+                "status": "error",
+                "message": f"Insufficient Aura! Need 200, you have {player.aura}",
+                "cost": 200,
+                "currency": "Aura"
+            }
+        
+        if not req.belief_key or not req.old_word or not req.new_word:
+            raise HTTPException(status_code=400, detail="Must provide belief_key, old_word, new_word")
+        
+        player.aura -= 200
+        
+        # Edit the belief
+        if req.belief_key in target.internal_truth:
+            old_belief = target.internal_truth[req.belief_key]
+            # Rewrite: replace old_word with new_word in the belief value
+            if isinstance(old_belief, str):
+                new_belief = old_belief.replace(req.old_word, req.new_word)
+                target.internal_truth[req.belief_key] = new_belief
+                
+                return {
+                    "status": "success",
+                    "action": "edit_truth",
+                    "cost_paid": 200,
+                    "message": f"✏️ Rewrote {target.name}'s belief!",
+                    "target_name": target.name,
+                    "belief_key": req.belief_key,
+                    "old_belief": old_belief,
+                    "new_belief": new_belief
+                }
+            else:
+                return {
+                    "status": "error",
+                    "message": f"Belief '{req.belief_key}' is not a string (type: {type(old_belief).__name__})"
+                }
+        else:
+            return {
+                "status": "error",
+                "message": f"Belief key '{req.belief_key}' not found in {target.name}'s internal truth"
+            }
+    
+    # --- ACTION 4: Leak DM (150 Aura) ---
+    elif req.action_type == "leak_dm":
+        if not target:
+            raise HTTPException(status_code=404, detail="Target NPC not found")
+        
+        if player.aura < 150:
+            return {
+                "status": "error",
+                "message": f"Insufficient Aura! Need 150, you have {player.aura}",
+                "cost": 150,
+                "currency": "Aura"
+            }
+        
+        player.aura -= 150
+        
+        # Trigger a Crucible on the target (crisis decision moment)
+        crisis_description = f"A leaked DM from you surfaced online:\n'{req.custom_message if req.custom_message else 'CLASSIFIED CONTENT'}'\n\nAll eyes on you now."
+        
+        import uuid
+        crucible_event = Event(
+            id=str(uuid.uuid4()),
+            type="crucible",
+            content=crisis_description,
+            initiator_id="SYSTEM",
+            visibility="Public",
+            target_ids=[target.id]
+        )
+        engine.process_action(crucible_event)
+        
+        return {
+            "status": "success",
+            "action": "leak_dm",
+            "cost_paid": 150,
+            "message": f"💣 Leaked DM triggered a CRUCIBLE on {target.name}!",
+            "target_name": target.name,
+            "crucible_description": crisis_description
+        }
+    
+    else:
+        raise HTTPException(status_code=400, detail="Unknown god mode action")
+
+@app.post("/api/god_mode/propaganda_machine")
+def god_mode_propaganda_machine(player_id: str, target_npc_id: str, custom_message: str):
+    """
+    Shorthand endpoint for propaganda machine action.
+    Costs 50 Wealth; forces target NPC to post custom message for 24h.
+    """
+    req = GodModeActionRequest(
+        player_id=player_id,
+        action_type="propaganda_machine",
+        target_id=target_npc_id,
+        custom_message=custom_message
+    )
+    return god_mode_action(req)
+
+@app.post("/api/god_mode/leak_dm")
+def god_mode_leak_dm(player_id: str, target_npc_id: str, dm_text: str):
+    """
+    Shorthand endpoint for leak DM action.
+    Costs 150 Aura; triggers a Crucible on target.
+    """
+    req = GodModeActionRequest(
+        player_id=player_id,
+        action_type="leak_dm",
+        target_id=target_npc_id,
+        custom_message=dm_text
+    )
+    return god_mode_action(req)
+
+@app.post("/api/god_mode/edit_truth")
+def god_mode_edit_truth(player_id: str, target_npc_id: str, belief_key: str, old_word: str, new_word: str):
+    """
+    Shorthand endpoint for edit truth action.
+    Costs 200 Aura; permanently rewrites one NPC belief.
+    """
+    req = GodModeActionRequest(
+        player_id=player_id,
+        action_type="edit_truth",
+        target_id=target_npc_id,
+        belief_key=belief_key,
+        old_word=old_word,
+        new_word=new_word
+    )
+    return god_mode_action(req)
 

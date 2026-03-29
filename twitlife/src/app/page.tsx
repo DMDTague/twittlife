@@ -97,6 +97,32 @@ export default function TwitLife() {
   const [simulationEra, setSimulationEra] = useState("Peace");
   const [isChaosMode, setIsChaosMode] = useState(false);
 
+  // Phase 27: World Events & God Mode
+  const [worldState, setWorldState] = useState<any>(null);
+  const [haterWinterActive, setHaterWinterActive] = useState(false);
+  const [algorithmShiftActive, setAlgorithmShiftActive] = useState(false);
+  const [algorithmMultipliers, setAlgorithmMultipliers] = useState<any>({});
+  
+  // God Mode UI State
+  const [godModeTab, setGodModeTab] = useState<'propaganda' | 'truth' | 'leak'>('propaganda');
+  const [propagandaTarget, setPropagandaTarget] = useState("");
+  const [propagandaMessage, setPropagandaMessage] = useState("");
+  const [truthTarget, setTruthTarget] = useState("");
+  const [truthBeliefKey, setTruthBeliefKey] = useState("");
+  const [truthOldWord, setTruthOldWord] = useState("");
+  const [truthNewWord, setTruthNewWord] = useState("");
+  const [leakTarget, setLeakTarget] = useState("");
+  const [leakMessage, setLeakMessage] = useState("");
+  const [godModeLoading, setGodModeLoading] = useState(false);
+  
+  // Stat Floats
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [statFloats, setStatFloats] = useState<any[]>([]);
+
+  // Available NPCs for God Mode targeting
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [availableNPCs, setAvailableNPCs] = useState<any[]>([]);
+
   useEffect(() => {
     // Phase 25: Support entity_id from URL to override localStorage
     const params = new URLSearchParams(window.location.search);
@@ -251,6 +277,22 @@ export default function TwitLife() {
     f(); const i = setInterval(f, 15000); return () => { clearInterval(i); };
   }, [identity]);
 
+  // Phase 27: Poll world state for active events
+  useEffect(() => {
+    if (!identity) return;
+    const f = async () => { 
+      try { 
+        const r = await fetch(`${API}/api/world_state`); 
+        const d = await r.json(); 
+        setWorldState(d);
+        setHaterWinterActive(d.world_events?.hater_winter?.active || false);
+        setAlgorithmShiftActive(d.world_events?.algorithm_shift?.active || false);
+        setAlgorithmMultipliers(d.world_events?.algorithm_shift?.topic_multipliers || {});
+      } catch { } 
+    };
+    f(); const i = setInterval(f, 10000); return () => { clearInterval(i); };
+  }, [identity]);
+
   useEffect(() => {
     if (!identity || activeTab !== 'Notifications') return;
     const f = async () => { try { const r = await fetch(`${API}/api/notifications?entity_id=${identity.handle}`); const d = await r.json(); setNotifications(d.notifications || []); } catch { } };
@@ -318,8 +360,32 @@ export default function TwitLife() {
     setPostContent("");
     setAttachMedia(false);
     setPostStatus("posting");
-    try { await fetch(`${API}/api/post_tweet`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initiator_id: identity?.handle, content: tempPost.content, media_url: tempMediaUrl }) }); setPostStatus("success"); } catch { setPostStatus("error"); }
+    try { 
+      const response = await fetch(`${API}/api/post_tweet`, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ initiator_id: identity?.handle, content: tempPost.content, media_url: tempMediaUrl }) 
+      });
+      const data = await response.json();
+      setPostStatus("success"); 
+      
+      // Phase 27: Emit stat float for +Aura on success
+      if (data.tier_progress !== undefined) {
+        addStatFloat('+10 Aura', '#1D9BF0');
+      }
+    } catch { 
+      setPostStatus("error"); 
+    }
     setTimeout(() => { setPostStatus(null); }, 3000);
+  };
+
+  // Phase 27: Add floating stat animation
+  const addStatFloat = (text: string, color: string) => {
+    const id = Math.random().toString();
+    setStatFloats(prev => [...prev, { id, text, color, startTime: Date.now() }]);
+    setTimeout(() => {
+      setStatFloats(prev => prev.filter(f => f.id !== id));
+    }, 1500);
   };
 
   const handleInteraction = async (eventId: string, type: 'like' | 'retweet') => {
@@ -402,6 +468,139 @@ export default function TwitLife() {
     setLoading(false);
   };
 
+  // Phase 27: God Mode Handlers
+  const handlePropagandaMachine = async () => {
+    if (!propagandaTarget.trim() || !propagandaMessage.trim()) {
+      alert("Select an NPC and write a message");
+      return;
+    }
+    setGodModeLoading(true);
+    try {
+      const r = await fetch(`${API}/api/god_mode/propaganda_machine`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          player_id: identity?.handle,
+          target_npc_id: propagandaTarget,
+          custom_message: propagandaMessage
+        })
+      });
+      const d = await r.json();
+      if (r.ok) {
+        alert(d.message);
+        setPlayerWealth(prev => prev - 50);
+        setPropagandaTarget("");
+        setPropagandaMessage("");
+        addStatFloat('-50 Wealth', '#FFD400');
+      } else {
+        alert(d.message || "Failed");
+      }
+    } catch (e) {
+      alert("Error: " + String(e));
+    }
+    setGodModeLoading(false);
+  };
+
+  const handleRevealTruth = async () => {
+    if (!truthTarget.trim()) {
+      alert("Select an NPC to reveal");
+      return;
+    }
+    setGodModeLoading(true);
+    try {
+      const r = await fetch(`${API}/api/god_mode/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          player_id: identity?.handle,
+          action_type: 'reveal_truth',
+          target_id: truthTarget
+        })
+      });
+      const d = await r.json();
+      if (r.ok) {
+        alert(`🔍 Truth Revealed:\n${JSON.stringify(d.internal_truth, null, 2)}`);
+        setPlayerAura(prev => prev - 100);
+        setTruthTarget("");
+        addStatFloat('-100 Aura', '#1D9BF0');
+      } else {
+        alert(d.message || "Failed");
+      }
+    } catch (e) {
+      alert("Error: " + String(e));
+    }
+    setGodModeLoading(false);
+  };
+
+  const handleEditTruth = async () => {
+    if (!truthTarget.trim() || !truthBeliefKey.trim() || !truthOldWord.trim() || !truthNewWord.trim()) {
+      alert("Fill all fields to edit a belief");
+      return;
+    }
+    setGodModeLoading(true);
+    try {
+      const r = await fetch(`${API}/api/god_mode/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          player_id: identity?.handle,
+          action_type: 'edit_truth',
+          target_id: truthTarget,
+          belief_key: truthBeliefKey,
+          old_word: truthOldWord,
+          new_word: truthNewWord
+        })
+      });
+      const d = await r.json();
+      if (r.ok) {
+        alert(`✏️ Belief rewritten:\n${truthBeliefKey}:\n"${d.old_belief}" → "${d.new_belief}"`);
+        setPlayerAura(prev => prev - 200);
+        setTruthTarget("");
+        setTruthBeliefKey("");
+        setTruthOldWord("");
+        setTruthNewWord("");
+        addStatFloat('-200 Aura', '#1D9BF0');
+      } else {
+        alert(d.message || "Failed");
+      }
+    } catch (e) {
+      alert("Error: " + String(e));
+    }
+    setGodModeLoading(false);
+  };
+
+  const handleLeakDM = async () => {
+    if (!leakTarget.trim() || !leakMessage.trim()) {
+      alert("Select an NPC and write the leaked DM");
+      return;
+    }
+    setGodModeLoading(true);
+    try {
+      const r = await fetch(`${API}/api/god_mode/leak_dm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          player_id: identity?.handle,
+          target_npc_id: leakTarget,
+          dm_text: leakMessage
+        })
+      });
+      const d = await r.json();
+      if (r.ok) {
+        alert(d.message);
+        setPlayerAura(prev => prev - 150);
+        setLeakTarget("");
+        setLeakMessage("");
+        addStatFloat('-150 Aura', '#1D9BF0');
+      } else {
+        alert(d.message || "Failed");
+      }
+    } catch (e) {
+      alert("Error: " + String(e));
+    }
+    setGodModeLoading(false);
+  };
+
   // === DATA ===
   const navItems = [
     { name: 'Home', icon: Home },
@@ -424,6 +623,212 @@ export default function TwitLife() {
   const charColor = postContent.length > 260 ? '#F4212E' : postContent.length > 240 ? '#FFD400' : '#1D9BF0';
 
   // === COMPONENTS ===
+  
+  // Phase 27: Stat Float Layer - Floating "+X Aura" animations
+  const StatFloatLayer = () => {
+    return (
+      <div className="fixed top-0 left-0 right-0 pointer-events-none">
+        {statFloats.map(float => {
+          const elapsedMs = Date.now() - float.startTime;
+          const progress = Math.min(elapsedMs / 1500, 1);
+          const translateY = -progress * 120;
+          const opacity = 1 - progress * 0.7;
+          return (
+            <div
+              key={float.id}
+              className="fixed text-2xl font-black tracking-wider"
+              style={{
+                left: 'calc(50% - 80px)',
+                top: '50%',
+                transform: `translateY(${translateY}px)`,
+                opacity,
+                color: float.color,
+                textShadow: `0 0 10px ${float.color}40`
+              }}
+            >
+              {float.text}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // Phase 27: God Mode - Propaganda Machine Card
+  const PropagandaMachineCard = () => {
+    const topNPCs = events
+      .map(e => e.initiator_id)
+      .filter((id, idx, arr) => arr.indexOf(id) === idx && id !== identity?.handle)
+      .slice(0, 10);
+
+    return (
+      <div className="space-y-4">
+        <div className="game-card p-5 bg-[#16181C] border border-[#2F3336] rounded-2xl">
+          <div className="flex items-center gap-2 mb-4">
+            <Zap className="w-5 h-5 text-[#FFD400]" />
+            <h3 className="font-black text-lg text-[#E7E9EA]">Propaganda Machine</h3>
+            <span className="ml-auto text-[#FFD400] font-black">50 ₵</span>
+          </div>
+          <p className="text-[13px] text-[#71767B] mb-4">Force an NPC to post your message for 24 hours.</p>
+          
+          <div className="space-y-3">
+            <select 
+              value={propagandaTarget} 
+              onChange={e => setPropagandaTarget(e.target.value)}
+              className="w-full px-3 py-2 bg-[#202327] border border-[#536471] rounded-lg text-[#E7E9EA] text-sm focus:outline-none focus:border-[#1D9BF0]"
+            >
+              <option value="">Select target NPC...</option>
+              {topNPCs.map(npc => (
+                <option key={npc} value={npc}>{npc}</option>
+              ))}
+            </select>
+            
+            <textarea 
+              value={propagandaMessage} 
+              onChange={e => setPropagandaMessage(e.target.value)}
+              placeholder="Write the message they'll post..."
+              maxLength={280}
+              className="w-full px-3 py-2 bg-[#202327] border border-[#536471] rounded-lg text-[#E7E9EA] text-sm focus:outline-none focus:border-[#1D9BF0] resize-none h-[80px]"
+            />
+            
+            <button 
+              onClick={handlePropagandaMachine} 
+              disabled={godModeLoading || playerWealth < 50}
+              className="w-full bg-[#FFD400] hover:bg-[#FFD400]/80 disabled:opacity-50 disabled:cursor-not-allowed text-black font-black py-2 rounded-lg transition text-sm"
+            >
+              {godModeLoading ? "Deploying..." : `Deploy (${playerWealth < 50 ? "Insufficient" : "Execute"})`}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Phase 27: God Mode - Truth Editor Card
+  const TruthEditorCard = () => {
+    const topNPCs = events
+      .map(e => e.initiator_id)
+      .filter((id, idx, arr) => arr.indexOf(id) === idx && id !== identity?.handle)
+      .slice(0, 10);
+
+    return (
+      <div className="space-y-4">
+        <div className="game-card p-5 bg-[#16181C] border border-[#2F3336] rounded-2xl">
+          <div className="flex items-center gap-2 mb-4">
+            <Zap className="w-5 h-5 text-[#7856FF]" />
+            <h3 className="font-black text-lg text-[#E7E9EA]">Truth Editor</h3>
+            <span className="ml-auto text-[#7856FF] font-black">200 ◈</span>
+          </div>
+          <p className="text-[13px] text-[#71767B] mb-4">Rewrite an NPC's internal belief. Costs 100 ◈ to reveal, 200 ◈ to edit.</p>
+          
+          <div className="space-y-3">
+            <select 
+              value={truthTarget} 
+              onChange={e => setTruthTarget(e.target.value)}
+              className="w-full px-3 py-2 bg-[#202327] border border-[#536471] rounded-lg text-[#E7E9EA] text-sm focus:outline-none focus:border-[#1D9BF0]"
+            >
+              <option value="">Select target NPC...</option>
+              {topNPCs.map(npc => (
+                <option key={npc} value={npc}>{npc}</option>
+              ))}
+            </select>
+
+            <button 
+              onClick={handleRevealTruth} 
+              disabled={godModeLoading || !truthTarget.trim() || playerAura < 100}
+              className="w-full bg-[#7856FF]/20 hover:bg-[#7856FF]/30 disabled:opacity-50 disabled:cursor-not-allowed text-[#7856FF] font-bold py-2 rounded-lg transition text-sm border border-[#7856FF]"
+            >
+              {godModeLoading ? "Revealing..." : "🔍 Reveal Internal Truth (100 ◈)"}
+            </button>
+            
+            <div className="grid grid-cols-2 gap-2">
+              <input 
+                type="text" 
+                placeholder="belief_key"
+                value={truthBeliefKey} 
+                onChange={e => setTruthBeliefKey(e.target.value)}
+                className="px-2 py-1.5 bg-[#202327] border border-[#536471] rounded-lg text-[#E7E9EA] text-sm focus:outline-none focus:border-[#1D9BF0]"
+              />
+              <input 
+                type="text" 
+                placeholder="old_word"
+                value={truthOldWord} 
+                onChange={e => setTruthOldWord(e.target.value)}
+                className="px-2 py-1.5 bg-[#202327] border border-[#536471] rounded-lg text-[#E7E9EA] text-sm focus:outline-none focus:border-[#1D9BF0]"
+              />
+            </div>
+
+            <input 
+              type="text" 
+              placeholder="new_word (replacement)"
+              value={truthNewWord} 
+              onChange={e => setTruthNewWord(e.target.value)}
+              className="w-full px-3 py-1.5 bg-[#202327] border border-[#536471] rounded-lg text-[#E7E9EA] text-sm focus:outline-none focus:border-[#1D9BF0]"
+            />
+            
+            <button 
+              onClick={handleEditTruth} 
+              disabled={godModeLoading || !truthTarget.trim() || !truthBeliefKey.trim() || !truthOldWord.trim() || !truthNewWord.trim() || playerAura < 200}
+              className="w-full bg-[#7856FF] hover:bg-[#6B47DD] disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-2 rounded-lg transition text-sm"
+            >
+              {godModeLoading ? "Editing..." : `✏️ Rewrite (200 ◈ | ${playerAura < 200 ? "Insufficient" : "Ready"})`}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Phase 27: God Mode - Leak DM Card
+  const LeakDMCard = () => {
+    const topNPCs = events
+      .map(e => e.initiator_id)
+      .filter((id, idx, arr) => arr.indexOf(id) === idx && id !== identity?.handle)
+      .slice(0, 10);
+
+    return (
+      <div className="space-y-4">
+        <div className="game-card p-5 bg-[#16181C] border border-[#F4212E]/30 rounded-2xl">
+          <div className="flex items-center gap-2 mb-4">
+            <Zap className="w-5 h-5 text-[#F4212E]" />
+            <h3 className="font-black text-lg text-[#E7E9EA]">Leak DM</h3>
+            <span className="ml-auto text-[#F4212E] font-black">150 ◈</span>
+          </div>
+          <p className="text-[13px] text-[#71767B] mb-4">Fabricate a leaked DM and trigger a Crucible crisis on target.</p>
+          
+          <div className="space-y-3">
+            <select 
+              value={leakTarget} 
+              onChange={e => setLeakTarget(e.target.value)}
+              className="w-full px-3 py-2 bg-[#202327] border border-[#536471] rounded-lg text-[#E7E9EA] text-sm focus:outline-none focus:border-[#1D9BF0]"
+            >
+              <option value="">Select target NPC...</option>
+              {topNPCs.map(npc => (
+                <option key={npc} value={npc}>{npc}</option>
+              ))}
+            </select>
+            
+            <textarea 
+              value={leakMessage} 
+              onChange={e => setLeakMessage(e.target.value)}
+              placeholder="The fabricated DM..."
+              maxLength={280}
+              className="w-full px-3 py-2 bg-[#202327] border border-[#536471] rounded-lg text-[#E7E9EA] text-sm focus:outline-none focus:border-[#1D9BF0] resize-none h-[80px]"
+            />
+            
+            <button 
+              onClick={handleLeakDM} 
+              disabled={godModeLoading || playerAura < 150}
+              className="w-full bg-[#F4212E] hover:bg-[#E01A28] disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-2 rounded-lg transition text-sm"
+            >
+              {godModeLoading ? "Leaking..." : `💣 Drop the Bomb (${playerAura < 150 ? "Insufficient" : "Execute"})`}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const PostCard = ({ post }: { post: any }) => {
     const isLiked = likedPosts.has(post.id);
@@ -574,6 +979,8 @@ export default function TwitLife() {
   // === MAIN LAYOUT ===
   return (
     <div className="min-h-screen bg-black text-[#E7E9EA] flex justify-center">
+      {/* Phase 27: Stat Float Layer */}
+      <StatFloatLayer />
 
       {/* LEFT SIDEBAR */}
       <header className="hidden sm:flex flex-col items-end xl:items-start w-[68px] xl:w-[275px] sticky top-0 h-screen px-2 xl:px-3 py-1">
@@ -641,6 +1048,36 @@ export default function TwitLife() {
           <div className="bg-[#FFD400]/10 border-b border-[#FFD400]/30 px-4 py-3 text-center animate-pulse">
             <span className="text-[13px] font-black text-[#FFD400] uppercase tracking-wider">⚠️ Labeled as Griefing Account — Aura Ceiling Permanently Capped</span>
             <p className="text-[11px] text-[#FFD400]/70 mt-0.5">Mix in domain-aligned posts to reduce Toxicity Fatigue.</p>
+          </div>
+        )}
+
+        {/* Phase 27: World Event Banners */}
+        {haterWinterActive && (
+          <div className="bg-gradient-to-r from-[#00BFFF]/20 via-[#0099CC]/20 to-[#00BFFF]/20 border-b-2 border-[#00BFFF] px-4 py-3 text-center animate-pulse backdrop-blur">
+            <div className="flex items-center justify-center gap-3">
+              <span className="text-2xl">❄️</span>
+              <div>
+                <p className="text-[13px] font-black text-[#00BFFF] uppercase tracking-wider">HATER WINTER ACTIVE</p>
+                <p className="text-[11px] text-[#00BFFF]/80 mt-0.5">All NPCs +50% hostile. Hostility heat multiplied 2x. Trust no one.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {algorithmShiftActive && (
+          <div className="bg-gradient-to-r from-[#7856FF]/20 via-[#6B47DD]/20 to-[#7856FF]/20 border-b-2 border-[#7856FF] px-4 py-3 text-center animate-pulse backdrop-blur">
+            <div className="flex items-center justify-center gap-3">
+              <span className="text-2xl">🔀</span>
+              <div>
+                <p className="text-[13px] font-black text-[#7856FF] uppercase tracking-wider">ALGORITHM SHIFTED</p>
+                <p className="text-[11px] text-[#7856FF]/80 mt-0.5">Topic reach multipliers randomized. Adapt or get buried.</p>
+                {Object.keys(algorithmMultipliers).length > 0 && (
+                  <p className="text-[10px] text-[#7856FF]/60 mt-1">
+                    {Object.entries(algorithmMultipliers).slice(0, 3).map(([topic, mult]) => `${topic}: ${mult.toFixed(1)}x`).join(' • ')}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -936,63 +1373,129 @@ export default function TwitLife() {
           )
         }
 
-        {/* === SHADOW MARKET (Phase 24) === */}
+        {/* === SHADOW MARKET & GOD MODE (Phase 24-27) === */}
         {
           activeTab === 'Market' && (
             <div className="p-4 animate-fadeIn">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-[23px] font-extrabold">Shadow Market</h2>
-                <div className="bg-[#FFD400]/10 text-[#FFD400] px-3 py-1 rounded-full text-[13px] font-black tracking-widest uppercase">
-                  Wealth: {playerWealth}
+                <h2 className="text-[23px] font-extrabold">Capital & Influence</h2>
+                <div className="flex gap-2">
+                  <div className="bg-[#FFD400]/10 text-[#FFD400] px-3 py-1 rounded-full text-[13px] font-black tracking-widest uppercase">
+                    Wealth: {playerWealth}
+                  </div>
+                  <div className="bg-[#1D9BF0]/10 text-[#1D9BF0] px-3 py-1 rounded-full text-[13px] font-black tracking-widest uppercase">
+                    Aura: {playerAura}
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 mb-8">
+              {/* Market Tabs */}
+              <div className="flex gap-2 mb-6 border-b border-[#2F3336]">
                 <button
-                  onClick={() => {
-                    fetch(`${API}/api/monetize?player_id=${identity?.handle}`, { method: 'POST' })
-                      .then(r => r.json())
-                      .then(d => { if (d.status === 'success') { setPlayerWealth(d.wealth); setPlayerAura(d.aura); setPostStatus(d.message); } });
-                  }}
-                  className="w-full text-left p-5 rounded-2xl border-2 border-dashed border-[#2F3336] hover:border-[#FFD400]/50 hover:bg-[#FFD400]/5 transition group"
+                  onClick={() => setGodModeTab('propaganda')}
+                  className={`px-4 py-3 font-bold text-[15px] border-b-2 transition ${
+                    godModeTab === 'propaganda'
+                      ? 'border-[#FFD400] text-[#FFD400]'
+                      : 'border-transparent text-[#71767B] hover:text-[#E7E9EA]'
+                  }`}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-black flex items-center justify-center text-[#FFD400] border border-[#2F3336]">
-                      <Landmark className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-lg text-[#E7E9EA] group-hover:text-[#FFD400]">Accept Promoted Post</div>
-                      <p className="text-[14px] text-[#71767B]">Earn 250 Wealth. Costs -150 Aura.</p>
-                    </div>
-                  </div>
+                  Shadow Market
                 </button>
-
-                {[
-                  { id: 'bot_net', name: 'Bot Net', desc: 'Add 5,000 followers instantly.', cost: 500, heat: '+20 Heat' },
-                  { id: 'engagement_pod', name: 'Engagement Pod', desc: 'Boost next post viral chances.', cost: 300, heat: '+10 Heat' },
-                  { id: 'smear_campaign', name: 'Smear Campaign', desc: 'Tank a rival\'s Aura.', cost: 1000, heat: '+30 Heat' },
-                  { id: 'premium_avatar', name: 'Premium Character', desc: 'Unlock clean high-end aesthetics.', cost: 50000, heat: '0 Heat', aura: '+100 Aura' }
-                ].map(item => (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      fetch(`${API}/api/market/buy`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ player_id: identity?.handle, item_id: item.id, target_id: '' })
-                      }).then(r => r.json()).then(d => { setPostStatus(d.message); });
-                    }}
-                    className="game-card w-full p-5 text-left bg-[#16181C] border border-[#2F3336] rounded-2xl hover:border-[#1D9BF0]/50 transition"
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="font-black text-xl text-[#E7E9EA]">{item.name}</span>
-                      <span className="text-[#FFD400] font-black">{item.cost} Wealth</span>
-                    </div>
-                    <p className="text-[#71767B] text-[15px] mb-3">{item.desc}</p>
-                    <span className="text-[12px] font-black text-[#F4212E] uppercase tracking-widest">{item.heat}</span>
-                  </button>
-                ))}
+                <button
+                  onClick={() => setGodModeTab('truth')}
+                  className={`px-4 py-3 font-bold text-[15px] border-b-2 transition ${
+                    godModeTab === 'truth'
+                      ? 'border-[#7856FF] text-[#7856FF]'
+                      : 'border-transparent text-[#71767B] hover:text-[#E7E9EA]'
+                  }`}
+                >
+                  God Mode
+                </button>
               </div>
+
+              {/* Shadow Market Tab */}
+              {godModeTab === 'propaganda' && (
+                <div className="grid grid-cols-1 gap-4 mb-8">
+                  <button
+                    onClick={() => {
+                      fetch(`${API}/api/monetize?player_id=${identity?.handle}`, { method: 'POST' })
+                        .then(r => r.json())
+                        .then(d => { if (d.status === 'success') { setPlayerWealth(d.wealth); setPlayerAura(d.aura); setPostStatus(d.message); addStatFloat('+250 Wealth', '#FFD400'); } });
+                    }}
+                    className="w-full text-left p-5 rounded-2xl border-2 border-dashed border-[#2F3336] hover:border-[#FFD400]/50 hover:bg-[#FFD400]/5 transition group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-black flex items-center justify-center text-[#FFD400] border border-[#2F3336]">
+                        <Landmark className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-lg text-[#E7E9EA] group-hover:text-[#FFD400]">Accept Promoted Post</div>
+                        <p className="text-[14px] text-[#71767B]">Earn 250 Wealth. Costs -150 Aura.</p>
+                      </div>
+                    </div>
+                  </button>
+
+                  {[
+                    { id: 'bot_net', name: 'Bot Net', desc: 'Add 5,000 followers instantly.', cost: 500, heat: '+20 Heat' },
+                    { id: 'engagement_pod', name: 'Engagement Pod', desc: 'Boost next post viral chances.', cost: 300, heat: '+10 Heat' },
+                    { id: 'smear_campaign', name: 'Smear Campaign', desc: 'Tank a rival\'s Aura.', cost: 1000, heat: '+30 Heat' },
+                    { id: 'premium_avatar', name: 'Premium Character', desc: 'Unlock clean high-end aesthetics.', cost: 50000, heat: '0 Heat', aura: '+100 Aura' }
+                  ].map(item => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        fetch(`${API}/api/market/buy`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ player_id: identity?.handle, item_id: item.id, target_id: '' })
+                        }).then(r => r.json()).then(d => { setPostStatus(d.message); });
+                      }}
+                      className="game-card w-full p-5 text-left bg-[#16181C] border border-[#2F3336] rounded-2xl hover:border-[#1D9BF0]/50 transition"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="font-black text-xl text-[#E7E9EA]">{item.name}</span>
+                        <span className="text-[#FFD400] font-black">{item.cost} ₵</span>
+                      </div>
+                      <p className="text-[#71767B] text-[15px] mb-3">{item.desc}</p>
+                      <span className="text-[12px] font-black text-[#F4212E] uppercase tracking-widest">{item.heat}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* God Mode Tab */}
+              {godModeTab === 'truth' && (
+                <div className="space-y-6 pb-8">
+                  <div className="bg-[#16181C] border border-[#7856FF]/30 rounded-2xl p-4 mb-4">
+                    <p className="text-[13px] text-[#71767B] mb-2">⚡ <span className="text-[#7856FF] font-bold">GOD MODE ACTIVATED</span></p>
+                    <p className="text-[13px] text-[#E7E9EA]">Manipulate the reality of the TwitLife simulation. Edit beliefs, plant propaganda, drop bombs. Every action costs Aura.</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <button
+                      onClick={() => setGodModeTab('propaganda')}
+                      className="w-full text-left p-4 bg-[#16181C] border border-[#FFD400]/30 rounded-xl hover:border-[#FFD400]/60 transition"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-black text-[#FFD400] mb-1">💬 Propaganda Machine</p>
+                          <p className="text-[12px] text-[#71767B]">50 ₵ to puppet a target NPC for 24h</p>
+                        </div>
+                        <Zap className="w-5 h-5 text-[#FFD400]" />
+                      </div>
+                    </button>
+                    <PropagandaMachineCard />
+                  </div>
+
+                  <div className="border-t border-[#2F3336] pt-6">
+                    <TruthEditorCard />
+                  </div>
+
+                  <div className="border-t border-[#2F3336] pt-6">
+                    <LeakDMCard />
+                  </div>
+                </div>
+              )}
             </div>
           )
         }

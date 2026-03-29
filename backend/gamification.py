@@ -79,6 +79,74 @@ CRUCIBLE_EVENTS = [
     }
 ]
 
+# ========== PHASE 27: ACCOUNT TIER PROGRESSION ==========
+
+TIER_PROGRESSION_QUESTS = {
+    "verified": [
+        {
+            "id": "first_1k",
+            "desc": "Reach 1,000 followers",
+            "condition": lambda e: e.follower_count >= 1000,
+            "reward": 1
+        },
+        {
+            "id": "post_10_days",
+            "desc": "Post at least once for 10 consecutive days",
+            "condition": lambda e: getattr(e, 'current_streak', 0) >= 10,
+            "reward": 1
+        },
+        {
+            "id": "survive_crucible",
+            "desc": "Survive a Crucible without failure",
+            "condition": lambda e: e.crucible_failures == 0,
+            "reward": 1
+        },
+        {
+            "id": "post_viral",
+            "desc": "Get a post to 10k+ engagement",
+            "condition": lambda e: getattr(e, 'best_post_engagement', 0) >= 10000,
+            "reward": 2
+        },
+        {
+            "id": "build_alliance",
+            "desc": "Build +50 relationship with 3 entities",
+            "condition": lambda e: sum(1 for s in e.long_term_memory.relationship_matrix.values() if s >= 50) >= 3,
+            "reward": 1
+        }
+    ]
+}
+
+def check_tier_progression(entity) -> int:
+    """
+    Returns progress (0-5) for verified tier. At 5/5, tier unlocked.
+    Updates entity.account_tier if tier is earned.
+    """
+    from models import AccountTier
+    
+    if entity.account_tier != AccountTier.GUEST:
+        return -1  # Already verified or higher
+    
+    tier_progress = getattr(entity, 'tier_progress', 0) or 0
+    quests = TIER_PROGRESSION_QUESTS.get("verified", [])
+    
+    for quest in quests:
+        if quest["condition"](entity) and quest["id"] not in getattr(entity, '_completed_tier_quests', []):
+            tier_progress += quest["reward"]
+            if not hasattr(entity, '_completed_tier_quests'):
+                entity._completed_tier_quests = []
+            entity._completed_tier_quests.append(quest["id"])
+    
+    entity.tier_progress = tier_progress
+    
+    if tier_progress >= 5:
+        entity.account_tier = AccountTier.VERIFIED
+        entity.is_shadowbanned = False
+        entity.shadowban_until = 0.0
+        print(f"[TIER UP] {entity.name} is now VERIFIED!")
+        return 5
+    
+    return tier_progress
+
 OFFLINE_EVENTS = [
     {
         "type": "offline",

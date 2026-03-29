@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Any, List, Dict, Literal, Optional
+from enum import Enum
 
 class LongTermMemory(BaseModel):
     core_beliefs: List[str] = Field(default_factory=list)
@@ -21,6 +22,22 @@ class Demographics(BaseModel):
     sexuality: str = "Unspecified"
 
 AgentTier = Literal['Basic', 'Core', 'Organization']
+
+class AccountTier(str, Enum):
+    GUEST = "guest"           # Start here, shadowbanned
+    VERIFIED = "verified"     # Earned through 5 main-line quests
+    TITAN = "titan"           # 50k+ followers (current max tier)
+    LEGACY = "legacy"         # Retired/banned account (monuments only)
+
+class JobStatus(str, Enum):
+    STREAMING = "streaming"
+    TRADING = "trading"
+    JOURNALISM = "journalism"
+    ACADEMIA = "academia"
+    POLITICS = "politics"
+    CORPORATE = "corporate"
+    UNEMPLOYED = "unemployed"
+    CANCELLED = "cancelled"
 
 class Entity(BaseModel):
     id: str
@@ -96,6 +113,26 @@ class Entity(BaseModel):
     t2_supporters: int = 0
     t3_supporters: int = 0
     last_known_follower_count: int = 0
+    
+    # --- Phase 27: Account Lifecycle (BitLife Mechanics) ---
+    account_tier: AccountTier = AccountTier.GUEST
+    tier_progress: int = 0        # 0-100, for verified progression
+    crucible_failures: int = 0    # Increments on failed crucibles (game over at 3)
+    is_deplatformed: bool = False # Game over state
+    deplatform_reason: Optional[str] = None
+    legacy_generation: int = 0    # 0 = original, 1 = after first ban/retire
+    legacy_aura_bonus: int = 0    # Inherited from previous account
+    generational_wealth: int = 0  # Wealth carries forward
+    total_influence_score: float = 0.0  # Sum of all engagement (for legacy)
+    
+    # --- Phase 27: NPC Career Paths ---
+    job_status: JobStatus = JobStatus.STREAMING
+    job_start_date: int = 0  # Day job began
+    years_in_job: float = 0.0
+    salary_per_day: int = 100
+    is_laid_off: bool = False
+    follower_growth_rate: float = 1.0  # Multiplier on organic growth
+    engagement_multiplier: float = 1.0  # How viral their posts are
 
 VisibilityType = Literal['Public', 'Private', 'Sub-group']
 

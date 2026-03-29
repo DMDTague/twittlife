@@ -45,6 +45,15 @@ class GameEngine:
         self.max_reactions_per_event = 5  # Configurable cap
         self.max_pulse_entities = 50     # Batched pulse processing cap
         
+        # Phase 27: World Events System
+        self.active_world_events = []
+        self.algorithmic_topic_multipliers = {
+            "tech": 1.0, "combat_sports": 1.0, "politics": 1.0,
+            "gaming": 1.0, "philly_local": 1.0, "finance": 1.0
+        }
+        self.hater_winter_active = False
+        self.hater_winter_end_day = 0
+        
         # Phase 21.1: Community Notes Fallback
         self.community_notes_dataset = [
             "Readers added context: This claim is factually disputed by multiple sources.",
@@ -1769,3 +1778,332 @@ You MUST output a valid JSON object matching this schema exactly:
                 
         print(f"[GOD MODE] Player purchased a Swarm Deployment. {len(strike_team)} bots mobilized on event {event_id}.")
         return True
+    
+    # ========== PHASE 27: ACCOUNT LIFECYCLE & DEPLATFORMING ==========
+    
+    def check_deplatform_condition(self, entity: Entity) -> bool:
+        """
+        Game Over triggers:
+        1. toxicity_fatigue >= 100
+        2. crucible_failures >= 3
+        """
+        if entity.toxicity_fatigue >= 100:
+            return True
+        if entity.crucible_failures >= 3:
+            return True
+        return False
+    
+    def trigger_deplatforming(self, entity: Entity, reason: str) -> Optional[Event]:
+        """
+        Player is banned. Execute graceful restart flow.
+        """
+        if entity.is_deplatformed:
+            return None  # Already deplatformed
+        
+        # Save legacy data
+        entity.legacy_generation += 1
+        entity.total_influence_score += entity.aura + (entity.follower_count / 100)
+        entity.legacy_aura_bonus = int(entity.total_influence_score * 0.1)  # 10% carries over
+        entity.generational_wealth = int(entity.wealth * 0.5)              # 50% wealth carries
+        
+        # Mark as deplatformed
+        entity.is_deplatformed = True
+        entity.deplatform_reason = reason
+        entity.status = "Deplatformed"
+        
+        # Log to event stream for UI notification
+        event = Event(
+            id=str(uuid.uuid4()),
+            type="deplatform",
+            content=f"Account deplatformed: {reason}",
+            initiator_id=entity.id,
+            visibility="Public",
+            timestamp=time.time()
+        )
+        self.state.events.append(event)
+        
+        print(f"[DEPLATFORM] {entity.name} banned: {reason} | Legacy Bonus: {entity.legacy_aura_bonus}")
+        return event
+    
+    def start_new_account(self, old_account: Entity, new_handle: str) -> Entity:
+        """
+        Player clicks "New Life." Create fresh account with legacy bonuses.
+        """
+        from models import AccountTier, JobStatus
+        
+        new_entity = Entity(
+            id=str(uuid.uuid4()),
+            name=new_handle,
+            account_tier=AccountTier.GUEST,
+            aura=500 + old_account.legacy_aura_bonus,  # Starter pack + bonus
+            wealth=old_account.generational_wealth,
+            is_shadowbanned=True,  # All guest accounts start shadowbanned
+            shadowban_until=time.time() + 86400 * 3,  # 3 days
+            legacy_generation=old_account.legacy_generation,
+            total_influence_score=0,
+            is_player=True
+        )
+        self.add_entity(new_entity)
+        print(f"[NEW ACCOUNT] {new_handle} (Gen {new_entity.legacy_generation}) | Aura: {new_entity.aura} | Wealth: {new_entity.wealth}")
+        return new_entity
+    
+    # ========== PHASE 27: NPC CAREER EVOLUTION ==========
+    
+    def simulate_npc_career_day(self, npc: Entity):
+        """
+        Daily career progression for NPCs.
+        Jobs grow followers, get cancelled, change roles.
+        """
+        from models import JobStatus
+        
+        if npc.is_player or npc.agent_tier == "Basic":
+            return  # Only for Core/Organization NPCs
+        
+        # Organic follower decay if unemployed
+        if npc.job_status == JobStatus.UNEMPLOYED:
+            decay = int(npc.follower_count * 0.02)  # Lose 2% daily
+            npc.follower_count = max(100, npc.follower_count - decay)
+            npc.engagement_multiplier *= 0.95  # Engagement fades
+        
+        # Job change chance (every ~30 days, 3% chance)
+        if random.random() < 0.03:
+            job_options = [j for j in JobStatus if j != npc.job_status]
+            new_job = random.choice(job_options)
+            old_job = npc.job_status
+            npc.job_status = new_job
+            npc.years_in_job = 0
+            
+            # Job change affects stats
+            if new_job == JobStatus.CANCELLED:
+                npc.follower_count = int(npc.follower_count * 0.3)  # Lose 70% followers
+                npc.engagement_multiplier = 0.1
+                npc.is_shadowbanned = True
+            elif new_job == JobStatus.STREAMING:
+                npc.salary_per_day = 500
+                npc.follower_growth_rate = 1.5
+            elif new_job == JobStatus.JOURNALISM:
+                npc.salary_per_day = 200
+                npc.follower_growth_rate = 1.2
+            elif new_job == JobStatus.TRADING:
+                npc.salary_per_day = 800
+                npc.follower_growth_rate = 0.8
+            
+            print(f"[NPC CAREER] {npc.name}: {old_job.value} → {new_job.value}")
+        
+        # Salary earned
+        npc.wealth = int(npc.wealth + npc.salary_per_day)
+        npc.years_in_job += 1.0 / 365.0
+        
+        # Followers grow naturally (career-dependent)
+        if npc.job_status != JobStatus.CANCELLED and npc.job_status != JobStatus.UNEMPLOYED:
+            growth = int(npc.follower_count * 0.01 * npc.follower_growth_rate)
+            npc.follower_count += growth
+    
+    def simulate_daily_npc_evolution(self):
+        """
+        Called once per game day to evolve all NPCs.
+        """
+        for npc in self.state.entities.values():
+            if not npc.is_player and npc.status == "Active":
+                self.simulate_npc_career_day(npc)
+    
+    # ========== PHASE 27: RELATIONSHIP-BASED AUTO-REPLIES ==========
+    
+    def generate_auto_replies(self, post_event: Event, player: Entity) -> list[Event]:
+        """
+        When player posts, haters/lovers auto-reply based on relationship.
+        Haters with -80+ relationship auto-reply with toxicity.
+        """
+        auto_reply_events = []
+        
+        for npc_id, relationship_score in player.long_term_memory.relationship_matrix.items():
+            npc = self.state.entities.get(npc_id)
+            if not npc or npc.is_player:
+                continue
+            
+            # Hate threshold: auto-reply with negativity
+            if relationship_score <= -80 and random.random() < 0.6:  # 60% chance
+                aggressive_reply = self.generate_autonomous_post(npc_id, topic=post_event.impact_vectors.keys() if post_event.impact_vectors else "general")
+                if aggressive_reply:
+                    aggressive_reply.reply_to_id = post_event.id
+                    auto_reply_events.append(aggressive_reply)
+                    
+                    # Deepen relationship (haters reinforce hate)
+                    new_score = int(relationship_score * 0.95) - 5  # Slight further decay
+                    player.long_term_memory.relationship_matrix[npc_id] = min(-100, new_score)
+            
+            # Love threshold: auto-reply with support
+            elif relationship_score >= 80 and random.random() < 0.4:
+                supportive_reply = self.generate_autonomous_post(npc_id, topic=list(post_event.impact_vectors.keys())[0] if post_event.impact_vectors else "general")
+                if supportive_reply:
+                    supportive_reply.reply_to_id = post_event.id
+                    auto_reply_events.append(supportive_reply)
+        
+        return auto_reply_events
+    
+    def update_relationship_decay(self, entity: Entity):
+        """
+        Relationships decay over time if no interaction.
+        Moves toward neutral (0).
+        """
+        for npc_id in list(entity.long_term_memory.relationship_matrix.keys()):
+            current_score = entity.long_term_memory.relationship_matrix[npc_id]
+            
+            # Decay towards neutral (0)
+            if current_score > 0:
+                entity.long_term_memory.relationship_matrix[npc_id] = int(current_score * 0.98)
+            elif current_score < 0:
+                entity.long_term_memory.relationship_matrix[npc_id] = int(current_score * 0.98)
+    
+    # ========== PHASE 27: WORLD EVENTS (HATER WINTER, ALGORITHM SHIFTS) ==========
+    
+    def trigger_hater_winter(self, duration_days: int = 7) -> bool:
+        """
+        Random event where all NPCs get +50% hostility for N days.
+        During this period, posts generate more heat and haters are more aggressive.
+        Chance: 1% per chaos pulse (~1% per minute realtime = ~1-2% per game day)
+        """
+        if self.hater_winter_active:
+            return False  # Already active
+        
+        if random.random() > 0.01:  # 1% trigger chance
+            return False
+        
+        # Activate Hater Winter
+        self.hater_winter_active = True
+        self.hater_winter_end_day = self.current_day + duration_days
+        
+        # Boost all NPCs' hostility
+        for npc in self.state.entities.values():
+            if not npc.is_player:
+                original = npc.trait_matrix.hostility
+                npc.trait_matrix.hostility = min(100, int(npc.trait_matrix.hostility * 1.5))
+                # Track boost for later reset
+                if not hasattr(npc, '_original_hostility'):
+                    npc._original_hostility = original
+        
+        print(f"[WORLD EVENT] ❄️ HATER WINTER BEGINS! Duration: {duration_days} days")
+        print(f"[WORLD EVENT] All NPC hostility +50%. Generation of heat multiplied by 2x.")
+        
+        return True
+    
+    def update_hater_winter(self):
+        """
+        Called daily. Check if Hater Winter should end.
+        """
+        if self.hater_winter_active and self.current_day >= self.hater_winter_end_day:
+            # Revert hostility
+            for npc in self.state.entities.values():
+                if hasattr(npc, '_original_hostility'):
+                    npc.trait_matrix.hostility = npc._original_hostility
+            
+            self.hater_winter_active = False
+            print(f"[WORLD EVENT] ❄️ Hater Winter ends. The world goes back to normal.")
+    
+    def get_hater_winter_heat_multiplier(self) -> float:
+        """Returns heat generation multiplier during Hater Winter."""
+        return 2.0 if self.hater_winter_active else 1.0
+    
+    def trigger_algorithmic_shift(self) -> dict:
+        """
+        Algorithm changes topic reach multipliers (0.1x to 10x).
+        Some topics explode, others die on the vine.
+        Must happen every 5 days or can be random (1% per pulse).
+        """
+        topics = list(self.algorithmic_topic_multipliers.keys())
+        
+        # Create dramatic shifts: 2-3 topics become extreme
+        new_multipliers = {}
+        for topic in topics:
+            new_multipliers[topic] = random.choice([0.1, 0.5, 1.0, 2.0, 5.0, 10.0])
+        
+        # Force 2-3 topics to extremes
+        extremes = random.sample(topics, random.randint(2, 3))
+        for topic in extremes:
+            new_multipliers[topic] = random.choice([0.05, 10.0])
+        
+        # Store old for UI diff
+        old_multipliers = self.algorithmic_topic_multipliers.copy()
+        self.algorithmic_topic_multipliers = new_multipliers
+        
+        # Calculate winners and losers
+        winners = [t for t in topics if new_multipliers[t] >= 5.0]
+        losers = [t for t in topics if new_multipliers[t] <= 0.1]
+        
+        print(f"[WORLD EVENT] 🔄 ALGORITHM SHIFTED!")
+        print(f"  WINNERS (10x): {', '.join(winners)}")
+        print(f"  LOSERS (0.1x): {', '.join(losers)}")
+        
+        return {"winners": winners, "losers": losers, "multipliers": new_multipliers}
+    
+    def get_topic_reach_multiplier(self, topic: str) -> float:
+        """Get current algorithmic multiplier for topic."""
+        return self.algorithmic_topic_multipliers.get(topic, 1.0)
+    
+    # ========== PHASE 27: GOD MODE - PROPAGANDA MACHINE ==========
+    
+    def propaganda_machine(self, player: Entity, target_npc_id: str, 
+                          custom_message: str) -> Optional[Event]:
+        """
+        Cost: 50 Wealth
+        Effect: Control target NPC's posts for 24 hours.
+        NPC will be forced to post the custom message.
+        
+        Players use this to:
+        - Make rivals say embarrassing things
+        - Sabotage competing influencers
+        - Create fake controversies
+        """
+        if player.wealth < 50:
+            print(f"[PROPAGANDA] {player.name} can't afford propaganda (need 50 wealth, have {player.wealth})")
+            return None
+        
+        target = self.state.entities.get(target_npc_id)
+        if not target:
+            return None
+        
+        # Store originals for revert
+        target._original_system_prompt = target.system_prompt_lock
+        target._controlled_by_player_until = time.time() + 86400  # 24 hours in seconds
+        target._propaganda_controller = player.id
+        
+        # Override with puppet behavior
+        target.system_prompt_lock = f"""You are {target.name}. A player has HACKED your account.
+You MUST post this message immediately:
+
+"{custom_message}"
+
+After posting this, wait 24 hours before you resume normal behavior.
+DO NOT BREAK CHARACTER. This is real. You are being controlled."""
+        
+        player.wealth -= 50
+        
+        # Log event
+        event = Event(
+            id=str(uuid.uuid4()),
+            type="propaganda",
+            content=f"⚙️ {player.name} HACKED {target.name}'s account. Puppet strings attached.",
+            initiator_id=player.id,
+            visibility="Private",
+            timestamp=time.time()
+        )
+        
+        print(f"[PROPAGANDA MACHINE] {player.name} controls {target.name} for 24h. Cost: 50 Wealth")
+        print(f"[PROPAGANDA] Forced message: '{custom_message}'")
+        
+        return event
+    
+    def revert_propaganda_control(self, npc: Entity) -> bool:
+        """Check if 24h has passed and revert puppet to normal."""
+        if hasattr(npc, '_controlled_by_player_until') and npc._controlled_by_player_until > 0:
+            if time.time() > npc._controlled_by_player_until:
+                # Revert
+                if hasattr(npc, '_original_system_prompt'):
+                    npc.system_prompt_lock = npc._original_system_prompt
+                npc._controlled_by_player_until = 0
+                npc._propaganda_controller = None
+                
+                print(f"[PUPPET FREED] {npc.name} regained autonomy after 24h of control")
+                return True
+        
+        return False
