@@ -113,11 +113,19 @@ Tweet: "{tweet_text}"
 '''
         try:
             response = groq_client.chat.completions.create(
-                model="meta-llama/llama-2-7b-chat",
+                model="google/gemma-3-27b-it:free",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=200,
-                temperature=0.3
+                temperature=0.3,
+                extra_headers={,
+                extra_headers={
+                    "HTTP-Referer": "https://twitlife.vercel.app",
+                    "X-Title": "TwitLife"
+                }
+                    "HTTP-Referer": "https://twitlife.vercel.app",
+                    "X-Title": "TwitLife"
+                }
             )
             data = json.loads(response.choices[0].message.content.strip())
             vectors = data.get("impact_vectors", {})
@@ -186,11 +194,19 @@ Tweet: "{tweet_text}"
 
         try:
             response = groq_client.chat.completions.create(
-                model="meta-llama/llama-2-7b-chat",
+                model="google/gemma-3-27b-it:free",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=200,
-                temperature=0.7
+                temperature=0.7,
+                extra_headers={,
+                extra_headers={
+                    "HTTP-Referer": "https://twitlife.vercel.app",
+                    "X-Title": "TwitLife"
+                }
+                    "HTTP-Referer": "https://twitlife.vercel.app",
+                    "X-Title": "TwitLife"
+                }
             )
             data = json.loads(response.choices[0].message.content.strip())
             
@@ -1249,14 +1265,22 @@ You MUST output a valid JSON object matching this schema exactly:
         try:
             print(f"[ENGINE] Generating DM Warfare from {npc.name} to {initiator_name} (Hate={is_hate})...")
             response = groq_client.chat.completions.create(
-                model="meta-llama/llama-2-7b-chat", 
+                model="google/gemma-3-27b-it:free",
                 messages=[
-                    {"role": "system", "content": system_prompt + dm_prompt_extension},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Slide into {initiator_name}'s DMs regarding their post: '{trigger_event.content}'"}
                 ],
-                max_tokens=200,
-                temperature=0.9, # Higher temperature for more unhinged behavior
-                response_format={"type": "json_object"}
+                max_tokens=200,,
+                extra_headers={
+                    "HTTP-Referer": "https://twitlife.vercel.app",
+                    "X-Title": "TwitLife"
+                }
+                temperature=0.9,
+                response_format={"type": "json_object"},
+                extra_headers={
+                    "HTTP-Referer": "https://twitlife.vercel.app",
+                    "X-Title": "TwitLife"
+                }
             )
             ai_data = json.loads(response.choices[0].message.content.strip())
             ai_text = ai_data.get("dm_text", "")
@@ -1302,14 +1326,22 @@ You MUST output a valid JSON object matching this schema exactly:
             # In a true async environment, we'd use AsyncGroq.
             # Using synchronous call in asyncio task for simplicity in this prototype.
             response = groq_client.chat.completions.create(
-                model="meta-llama/llama-2-7b-chat",
+                model="google/gemma-3-27b-it:free",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=200,
+                max_tokens=200,,
+                extra_headers={
+                    "HTTP-Referer": "https://twitlife.vercel.app",
+                    "X-Title": "TwitLife"
+                }
                 temperature=0.85,
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
+                extra_headers={
+                    "HTTP-Referer": "https://twitlife.vercel.app",
+                    "X-Title": "TwitLife"
+                }
             )
             data = json.loads(response.choices[0].message.content.strip())
             
@@ -1470,7 +1502,7 @@ You MUST output a valid JSON object matching this schema exactly:
         try:
             print(f"[ENGINE] Generating Identity from private description...")
             response = groq_client.chat.completions.create(
-                model="meta-llama/llama-2-7b-chat",
+                model="google/gemma-3-27b-it:free",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"}
             )
@@ -1584,12 +1616,16 @@ You MUST output a valid JSON object matching this schema exactly:
         try:
             print(f"[ENGINE] Generating LLM response for {npc.name}...")
             response = groq_client.chat.completions.create(
-                model="meta-llama/llama-2-7b-chat", 
+                model="google/gemma-3-27b-it:free", 
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
                 ],
-                max_tokens=200,
+                max_tokens=200,,
+                extra_headers={
+                    "HTTP-Referer": "https://twitlife.vercel.app",
+                    "X-Title": "TwitLife"
+                }
                 temperature=0.8,
                 response_format={"type": "json_object"}
             )
@@ -1679,12 +1715,16 @@ You MUST output a valid JSON object matching this schema exactly:
 
         try:
             response = groq_client.chat.completions.create(
-                model="meta-llama/llama-2-7b-chat",
+                model="google/gemma-3-27b-it:free",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_msg}
                 ],
-                max_tokens=150,
+                max_tokens=150,,
+                extra_headers={
+                    "HTTP-Referer": "https://twitlife.vercel.app",
+                    "X-Title": "TwitLife"
+                }
                 temperature=0.8,
                 response_format={"type": "json_object"}
             )
