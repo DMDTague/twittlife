@@ -1,5 +1,7 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 from pydantic import BaseModel
 import uuid
 import asyncio
@@ -35,6 +37,33 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=3600,
 )
+
+# Custom middleware to enforce CORS headers (nuclear option)
+class CORSEnforcerMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        origin = request.headers.get("origin")
+        if origin in [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "https://twittlife.vercel.app",
+            "https://twittlife-staging.vercel.app",
+            "https://twittlife-dev.vercel.app",
+        ]:
+            if request.method == "OPTIONS":
+                return Response(headers={
+                    "Access-Control-Allow-Origin": origin,
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Max-Age": "3600",
+                })
+            response = await call_next(request)
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+            return response
+        return await call_next(request)
+
+app.add_middleware(CORSEnforcerMiddleware)
 
 # Initialize Global State
 state = GameState()
