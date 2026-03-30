@@ -118,11 +118,7 @@ Tweet: "{tweet_text}"
                 response_format={"type": "json_object"},
                 max_tokens=200,
                 temperature=0.3,
-                extra_headers={,
                 extra_headers={
-                    "HTTP-Referer": "https://twitlife.vercel.app",
-                    "X-Title": "TwitLife"
-                }
                     "HTTP-Referer": "https://twitlife.vercel.app",
                     "X-Title": "TwitLife"
                 }
@@ -199,11 +195,7 @@ Tweet: "{tweet_text}"
                 response_format={"type": "json_object"},
                 max_tokens=200,
                 temperature=0.7,
-                extra_headers={,
                 extra_headers={
-                    "HTTP-Referer": "https://twitlife.vercel.app",
-                    "X-Title": "TwitLife"
-                }
                     "HTTP-Referer": "https://twitlife.vercel.app",
                     "X-Title": "TwitLife"
                 }
