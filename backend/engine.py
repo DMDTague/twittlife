@@ -5,6 +5,7 @@ import os
 import math
 import uuid
 from typing import Optional
+from types import SimpleNamespace
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -21,6 +22,41 @@ try:
 except Exception as e:
     groq_client = None
     print(f"Failed to initialize OpenRouter client: {e}")
+
+# Helper: call OpenRouter with retries and graceful fallback
+def _call_openrouter_with_retries(client, model, messages, max_tokens=200, temperature=0.8, response_format=None, extra_headers=None, max_retries=4, backoff_base=0.5):
+    if client is None:
+        raise RuntimeError("OpenRouter client not initialized")
+    for attempt in range(1, max_retries + 1):
+        try:
+            return client.chat.completions.create(
+                model=model,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                response_format=response_format,
+                extra_headers=extra_headers
+            )
+        except Exception as e:
+            msg = str(e).lower()
+            is_rate = ("429" in msg) or ("rate-limit" in msg) or ("temporarily rate-limited" in msg) or ("rate limited" in msg)
+            if not is_rate:
+                raise
+            if attempt < max_retries:
+                sleep_time = backoff_base * (2 ** (attempt - 1)) + random.uniform(0, backoff_base)
+                print(f"[ENGINE] LLM rate-limited (attempt {attempt}/{max_retries}). Sleeping {sleep_time:.2f}s then retrying.")
+                time.sleep(sleep_time)
+                continue
+            print(f"[ENGINE] LLM rate-limited after {attempt} attempts. Raising last exception.")
+            raise
+
+def call_openrouter_safe(client, model, messages, max_tokens=200, temperature=0.8, response_format=None, extra_headers=None, max_retries=4, backoff_base=0.5):
+    try:
+        return _call_openrouter_with_retries(client, model, messages, max_tokens, temperature, response_format, extra_headers, max_retries, backoff_base)
+    except Exception as e:
+        print(f"[ENGINE] LLM API Call failed after retries: {e}")
+        fallback_content = json.dumps({"tweet": "The AI is temporarily unavailable. NPC did not generate a reply.", "impact_score": 0})
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=fallback_content))], usage=SimpleNamespace(total_tokens=0))
 
 
 class GameEngine:
@@ -112,7 +148,7 @@ Ensure you output a valid JSON object with EXACTLY this structure:
 Tweet: "{tweet_text}"
 '''
         try:
-            response = groq_client.chat.completions.create(
+            response = call_openrouter_safe(groq_client,
                 model="google/gemma-3-27b-it:free",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
@@ -189,7 +225,7 @@ Tweet: "{tweet_text}"
         """
 
         try:
-            response = groq_client.chat.completions.create(
+            response = call_openrouter_safe(groq_client,
                 model="google/gemma-3-27b-it:free",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
@@ -1256,7 +1292,7 @@ You MUST output a valid JSON object matching this schema exactly:
         '''
         try:
             print(f"[ENGINE] Generating DM Warfare from {npc.name} to {initiator_name} (Hate={is_hate})...")
-            response = groq_client.chat.completions.create(
+            response = call_openrouter_safe(groq_client,
                 model="google/gemma-3-27b-it:free",
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -1313,7 +1349,7 @@ You MUST output a valid JSON object matching this schema exactly:
             # Note: We use groq_client in synchronous mode currently. 
             # In a true async environment, we'd use AsyncGroq.
             # Using synchronous call in asyncio task for simplicity in this prototype.
-            response = groq_client.chat.completions.create(
+            response = call_openrouter_safe(groq_client,
                 model="google/gemma-3-27b-it:free",
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -1485,7 +1521,7 @@ You MUST output a valid JSON object matching this schema exactly:
         """
         try:
             print(f"[ENGINE] Generating Identity from private description...")
-            response = groq_client.chat.completions.create(
+            response = call_openrouter_safe(groq_client,
                 model="google/gemma-3-27b-it:free",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"}
@@ -1599,7 +1635,7 @@ You MUST output a valid JSON object matching this schema exactly:
         
         try:
             print(f"[ENGINE] Generating LLM response for {npc.name}...")
-            response = groq_client.chat.completions.create(
+            response = call_openrouter_safe(groq_client,
                 model="google/gemma-3-27b-it:free", 
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -1698,7 +1734,7 @@ You MUST output a valid JSON object matching this schema exactly:
         user_msg = f"Timeline Context: {vibe_context}\n\nWhat do you post right now?"
 
         try:
-            response = groq_client.chat.completions.create(
+            response = call_openrouter_safe(groq_client,
                 model="google/gemma-3-27b-it:free",
                 messages=[
                     {"role": "system", "content": system_prompt},
