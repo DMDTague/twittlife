@@ -5,15 +5,15 @@ from openai import OpenAI
 load_dotenv()
 
 client = OpenAI(
-    base_url="https://api.groq.com/openai/v1",
-    api_key=os.getenv("GROQ_API_KEY"),
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv("OPENROUTER_API_KEY"),
 )
 
-print("Booting up the Groq AI brain...")
+print("Booting up the OpenRouter AI brain...")
 
-# Swapped to the new, supported model!
+# Using OpenRouter with Mistral (fast, free tier available)
 response = client.chat.completions.create(
-    model="llama-3.1-8b-instant", 
+    model="mistralai/mistral-7b-instruct:free", 
     messages=[
         {"role": "system", "content": "You are a toxic political troll bot on Twitter. Use bad-faith arguments and slang."},
         {"role": "user", "content": "The mayor just passed a new tax bill. Write a short, angry quote-tweet."}
