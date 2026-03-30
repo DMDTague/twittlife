@@ -1320,10 +1320,6 @@ You MUST output a valid JSON object matching this schema exactly:
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=200,
-                extra_headers={
-                    "HTTP-Referer": "https://twitlife.vercel.app",
-                    "X-Title": "TwitLife"
-                }
                 temperature=0.85,
                 response_format={"type": "json_object"},
                 extra_headers={
@@ -1610,12 +1606,12 @@ You MUST output a valid JSON object matching this schema exactly:
                     {"role": "user", "content": user_message}
                 ],
                 max_tokens=200,
+                temperature=0.8,
+                response_format={"type": "json_object"},
                 extra_headers={
                     "HTTP-Referer": "https://twitlife.vercel.app",
                     "X-Title": "TwitLife"
                 }
-                temperature=0.8,
-                response_format={"type": "json_object"}
             )
             
             ai_data = json.loads(response.choices[0].message.content.strip())
@@ -1709,12 +1705,12 @@ You MUST output a valid JSON object matching this schema exactly:
                     {"role": "user", "content": user_msg}
                 ],
                 max_tokens=150,
+                temperature=0.8,
+                response_format={"type": "json_object"},
                 extra_headers={
                     "HTTP-Referer": "https://twitlife.vercel.app",
                     "X-Title": "TwitLife"
                 }
-                temperature=0.8,
-                response_format={"type": "json_object"}
             )
             ai_data = json.loads(response.choices[0].message.content.strip())
             content = ai_data.get("tweet", "").strip()
