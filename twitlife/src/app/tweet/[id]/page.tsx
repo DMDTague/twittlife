@@ -59,7 +59,7 @@ export default function TweetDetail() {
 
     const fetchTweet = async () => {
         try {
-            const res = await fetch(`${API}/api/tweet/${tweetId}`, {
+            const res = await fetch(`${API}/api/thread?post_id=${tweetId}`, {
                 cache: 'no-store',
                 headers: {
                     'Cache-Control': 'no-cache, no-store, must-revalidate',
