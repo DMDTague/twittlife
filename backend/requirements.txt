@@ -9,3 +9,4 @@ numpy>=1.26.4
 supabase>=2.0.0
 slowapi>=0.2.0
 psycopg2-binary>=2.9.9
+# Railway rebuild trigger
