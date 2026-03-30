@@ -26,12 +26,14 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "https://twittlife.vercel.app",
-        "https://twittlife-*.vercel.app",  # Preview deployments
-        "https://twittlife-git-*.vercel.app",  # Git branch deployments
+        "https://twittlife-staging.vercel.app",
+        "https://twittlife-dev.vercel.app",
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 # Initialize Global State
