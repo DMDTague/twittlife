@@ -6,6 +6,7 @@ import math
 import uuid
 from typing import Optional
 from types import SimpleNamespace
+from threading import BoundedSemaphore
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -23,23 +24,52 @@ except Exception as e:
     groq_client = None
     print(f"Failed to initialize OpenRouter client: {e}")
 
+# Concurrency + env-driven LLM tuning
+LLM_CONCURRENCY = int(os.getenv("LLM_CONCURRENCY", "2"))
+try:
+    llm_semaphore = BoundedSemaphore(LLM_CONCURRENCY)
+except Exception:
+    llm_semaphore = BoundedSemaphore(2)
+
+DEFAULT_LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "4"))
+DEFAULT_LLM_BACKOFF_BASE = float(os.getenv("LLM_BACKOFF_BASE", "0.5"))
+
 # Helper: call OpenRouter with retries and graceful fallback
 def _call_openrouter_with_retries(client, model, messages, max_tokens=200, temperature=0.8, response_format=None, extra_headers=None, max_retries=4, backoff_base=0.5):
     if client is None:
         raise RuntimeError("OpenRouter client not initialized")
+
+    # Allow env overrides for tuning without code changes
+    try:
+        max_retries = int(os.getenv("LLM_MAX_RETRIES", str(max_retries)))
+    except Exception:
+        pass
+    try:
+        backoff_base = float(os.getenv("LLM_BACKOFF_BASE", str(backoff_base)))
+    except Exception:
+        pass
+
     for attempt in range(1, max_retries + 1):
         try:
-            return client.chat.completions.create(
-                model=model,
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                response_format=response_format,
-                extra_headers=extra_headers
-            )
+            # throttle concurrent LLM calls
+            llm_semaphore.acquire()
+            try:
+                return client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    response_format=response_format,
+                    extra_headers=extra_headers
+                )
+            finally:
+                try:
+                    llm_semaphore.release()
+                except Exception:
+                    pass
         except Exception as e:
             msg = str(e).lower()
-            is_rate = ("429" in msg) or ("rate-limit" in msg) or ("temporarily rate-limited" in msg) or ("rate limited" in msg)
+            is_rate = ("429" in msg) or ("rate-limit" in msg) or ("temporarily rate-limited" in msg) or ("rate limited" in msg) or ("rate limit exceeded" in msg)
             if not is_rate:
                 raise
             if attempt < max_retries:
