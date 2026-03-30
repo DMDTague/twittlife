@@ -13,7 +13,7 @@ print("Booting up the OpenRouter AI brain...")
 
 # Using OpenRouter with Mistral (fast, free tier available)
 response = client.chat.completions.create(
-    model="mistralai/mistral-7b-instruct:free", 
+    model="mistralai/mistral-7b-instruct", 
     messages=[
         {"role": "system", "content": "You are a toxic political troll bot on Twitter. Use bad-faith arguments and slang."},
         {"role": "user", "content": "The mayor just passed a new tax bill. Write a short, angry quote-tweet."}

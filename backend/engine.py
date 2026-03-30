@@ -113,7 +113,7 @@ Tweet: "{tweet_text}"
 '''
         try:
             response = groq_client.chat.completions.create(
-                model="mistralai/mistral-7b-instruct:free",
+                model="mistralai/mistral-7b-instruct",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=200,
@@ -186,7 +186,7 @@ Tweet: "{tweet_text}"
 
         try:
             response = groq_client.chat.completions.create(
-                model="mistralai/mistral-7b-instruct:free",
+                model="mistralai/mistral-7b-instruct",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 max_tokens=200,
@@ -1249,7 +1249,7 @@ You MUST output a valid JSON object matching this schema exactly:
         try:
             print(f"[ENGINE] Generating DM Warfare from {npc.name} to {initiator_name} (Hate={is_hate})...")
             response = groq_client.chat.completions.create(
-                model="mistralai/mistral-7b-instruct:free", 
+                model="mistralai/mistral-7b-instruct", 
                 messages=[
                     {"role": "system", "content": system_prompt + dm_prompt_extension},
                     {"role": "user", "content": f"Slide into {initiator_name}'s DMs regarding their post: '{trigger_event.content}'"}
@@ -1302,7 +1302,7 @@ You MUST output a valid JSON object matching this schema exactly:
             # In a true async environment, we'd use AsyncGroq.
             # Using synchronous call in asyncio task for simplicity in this prototype.
             response = groq_client.chat.completions.create(
-                model="mistralai/mistral-7b-instruct:free",
+                model="mistralai/mistral-7b-instruct",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
@@ -1470,7 +1470,7 @@ You MUST output a valid JSON object matching this schema exactly:
         try:
             print(f"[ENGINE] Generating Identity from private description...")
             response = groq_client.chat.completions.create(
-                model="mistralai/mistral-7b-instruct:free",
+                model="mistralai/mistral-7b-instruct",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"}
             )
@@ -1584,7 +1584,7 @@ You MUST output a valid JSON object matching this schema exactly:
         try:
             print(f"[ENGINE] Generating LLM response for {npc.name}...")
             response = groq_client.chat.completions.create(
-                model="mistralai/mistral-7b-instruct:free", 
+                model="mistralai/mistral-7b-instruct", 
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
@@ -1679,7 +1679,7 @@ You MUST output a valid JSON object matching this schema exactly:
 
         try:
             response = groq_client.chat.completions.create(
-                model="mistralai/mistral-7b-instruct:free",
+                model="mistralai/mistral-7b-instruct",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_msg}
