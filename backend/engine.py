@@ -1262,11 +1262,7 @@ You MUST output a valid JSON object matching this schema exactly:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Slide into {initiator_name}'s DMs regarding their post: '{trigger_event.content}'"}
                 ],
-                max_tokens=200,,
-                extra_headers={
-                    "HTTP-Referer": "https://twitlife.vercel.app",
-                    "X-Title": "TwitLife"
-                }
+                max_tokens=200,
                 temperature=0.9,
                 response_format={"type": "json_object"},
                 extra_headers={
@@ -1323,7 +1319,7 @@ You MUST output a valid JSON object matching this schema exactly:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=200,,
+                max_tokens=200,
                 extra_headers={
                     "HTTP-Referer": "https://twitlife.vercel.app",
                     "X-Title": "TwitLife"
@@ -1613,7 +1609,7 @@ You MUST output a valid JSON object matching this schema exactly:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
                 ],
-                max_tokens=200,,
+                max_tokens=200,
                 extra_headers={
                     "HTTP-Referer": "https://twitlife.vercel.app",
                     "X-Title": "TwitLife"
@@ -1712,7 +1708,7 @@ You MUST output a valid JSON object matching this schema exactly:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_msg}
                 ],
-                max_tokens=150,,
+                max_tokens=150,
                 extra_headers={
                     "HTTP-Referer": "https://twitlife.vercel.app",
                     "X-Title": "TwitLife"
