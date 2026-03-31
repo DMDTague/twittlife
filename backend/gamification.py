@@ -1,4 +1,5 @@
 # backend/gamification.py
+import math
 
 ACHIEVEMENTS = {
     "first_dogpile": {

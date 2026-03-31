@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Crown, TrendingUp, DollarSign, AlertCircle, RotateCcw, History, Trophy } from "lucide-react";
+import { Crown, TrendingUp, DollarSign, AlertCircle, RotateCcw, Trophy } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 interface FinalStats {
@@ -13,7 +13,6 @@ interface FinalStats {
     generation: number;
     account_tier: string;
     deplatform_reason: string;
-    deplatform_at: string;
   };
   stats: {
     aura_peak: number;
@@ -27,86 +26,78 @@ interface FinalStats {
     aura_bonus: number;
     wealth_bonus: number;
     follower_bonus: number;
-    tier_bonus_multiplier: number;
   };
 }
 
-export default function GameOverPage() {
+function GameOverContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, character, signOut } = useAuth();
+  const { legacy, signOut } = useAuth();
 
   const [stats, setStats] = useState<FinalStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
 
-  // Load final stats from API
   useEffect(() => {
-    if (!user || !character) {
-      router.push("/login");
-      return;
+    // Build stats from legacy data if available
+    if (legacy) {
+      setStats({
+        character: {
+          handle: legacy.handle,
+          niche: "general",
+          generation: legacy.generation,
+          account_tier: legacy.tierReached,
+          deplatform_reason: searchParams.get("reason") || legacy.cause || "Unknown",
+        },
+        stats: {
+          aura_peak: legacy.auraBonus * 10,
+          followers_peak: legacy.followerBonus * 10,
+          wealth_accumulated: legacy.wealthBonus * 10,
+          posts_made: 0,
+          engagement_total: 0,
+          days_active: 0,
+        },
+        legacy: {
+          aura_bonus: legacy.auraBonus,
+          wealth_bonus: legacy.wealthBonus,
+          follower_bonus: legacy.followerBonus,
+        },
+      });
+    } else {
+      // No legacy data — create placeholder
+      setStats({
+        character: {
+          handle: "unknown",
+          niche: "general",
+          generation: 1,
+          account_tier: "guest",
+          deplatform_reason: searchParams.get("reason") || "Unknown",
+        },
+        stats: {
+          aura_peak: 1500,
+          followers_peak: 500,
+          wealth_accumulated: 0,
+          posts_made: 0,
+          engagement_total: 0,
+          days_active: 0,
+        },
+        legacy: { aura_bonus: 0, wealth_bonus: 0, follower_bonus: 0 },
+      });
     }
-
-    const fetchStats = async () => {
-      try {
-        // For now, we'll show placeholder stats
-        // In Phase 2, this will fetch from the API
-        setStats({
-          character: {
-            handle: character.name,
-            niche: character.niche,
-            generation: character.generation,
-            account_tier: character.account_tier,
-            deplatform_reason: searchParams.get("reason") || "Unknown",
-            deplatform_at: new Date().toISOString(),
-          },
-          stats: {
-            aura_peak: 8750,
-            followers_peak: 125000,
-            wealth_accumulated: 45320,
-            posts_made: 348,
-            engagement_total: 1245000,
-            days_active: 47.5,
-          },
-          legacy: {
-            aura_bonus: 150,
-            wealth_bonus: 21660,
-            follower_bonus: 1000,
-            tier_bonus_multiplier: 1.1,
-          },
-        });
-      } catch (err) {
-        console.error("Failed to load stats:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStats();
-  }, [user, character, router, searchParams]);
+    setLoading(false);
+  }, [legacy, searchParams]);
 
   const handleStartNextGeneration = async () => {
     setIsStarting(true);
-    try {
-      // TODO: Call /api/game/new-generation
-      // Then redirect to /create-account
-      router.push("/create-account");
-    } catch (err) {
-      console.error("Failed to start next generation:", err);
-      setIsStarting(false);
-    }
+    router.push("/");
   };
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      router.push("/login");
-    } catch (err) {
-      console.error("Failed to sign out:", err);
-    }
+  const handleSignOut = () => {
+    signOut();
+    router.push("/");
   };
 
-  if (loading) {
+  if (loading || !stats) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
         <div className="text-center">
@@ -117,15 +108,6 @@ export default function GameOverPage() {
     );
   }
 
-  if (!stats) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-black">
-        <p className="text-white">Failed to load game over screen</p>
-      </div>
-    );
-  }
-
-  // Determine deplatform reason color
   const reasonColors: { [key: string]: string } = {
     toxicity_fatigue: "text-red-400",
     crucible_failures: "text-orange-400",
@@ -137,14 +119,12 @@ export default function GameOverPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-red-950 to-black overflow-hidden">
-      {/* Animated background effect */}
       <div className="absolute inset-0 opacity-20">
         <div className="absolute top-0 right-0 w-96 h-96 bg-red-500 rounded-full mix-blend-multiply filter blur-3xl animate-pulse" />
       </div>
 
       <div className="relative z-10 min-h-screen flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-2xl">
-          {/* Game Over Header */}
           <div className="text-center mb-8 space-y-4">
             <div className="text-6xl mb-4">💀</div>
             <h1 className="text-4xl md:text-5xl font-black text-white mb-2">ACCOUNT TERMINATED</h1>
@@ -154,9 +134,7 @@ export default function GameOverPage() {
             </p>
           </div>
 
-          {/* Main Card */}
           <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-8 shadow-2xl space-y-8">
-            {/* Final Stats Section */}
             <div className="space-y-4">
               <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                 <Trophy className="w-6 h-6 text-yellow-400" />
@@ -164,7 +142,6 @@ export default function GameOverPage() {
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Tier */}
                 <div className="p-4 bg-gradient-to-br from-purple-500/10 to-purple-500/5 border border-purple-500/20 rounded-lg">
                   <p className="text-gray-400 text-xs font-medium mb-1">HIGHEST TIER</p>
                   <p className="text-2xl font-bold text-purple-400 flex items-center gap-2">
@@ -173,7 +150,6 @@ export default function GameOverPage() {
                   </p>
                 </div>
 
-                {/* Followers */}
                 <div className="p-4 bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-500/20 rounded-lg">
                   <p className="text-gray-400 text-xs font-medium mb-1">FOLLOWERS PEAK</p>
                   <p className="text-2xl font-bold text-blue-400 flex items-center gap-2">
@@ -182,7 +158,6 @@ export default function GameOverPage() {
                   </p>
                 </div>
 
-                {/* Wealth */}
                 <div className="p-4 bg-gradient-to-br from-green-500/10 to-green-500/5 border border-green-500/20 rounded-lg">
                   <p className="text-gray-400 text-xs font-medium mb-1">WEALTH ACCUMULATED</p>
                   <p className="text-2xl font-bold text-green-400 flex items-center gap-2">
@@ -191,58 +166,42 @@ export default function GameOverPage() {
                   </p>
                 </div>
 
-                {/* Days */}
                 <div className="p-4 bg-gradient-to-br from-orange-500/10 to-orange-500/5 border border-orange-500/20 rounded-lg">
-                  <p className="text-gray-400 text-xs font-medium mb-1">DAYS ACTIVE</p>
+                  <p className="text-gray-400 text-xs font-medium mb-1">GENERATION</p>
                   <p className="text-2xl font-bold text-orange-400">
-                    {stats.stats.days_active.toFixed(1)}d
-                  </p>
-                </div>
-
-                {/* Posts */}
-                <div className="p-4 bg-gradient-to-br from-cyan-500/10 to-cyan-500/5 border border-cyan-500/20 rounded-lg">
-                  <p className="text-gray-400 text-xs font-medium mb-1">POSTS MADE</p>
-                  <p className="text-2xl font-bold text-cyan-400">
-                    {stats.stats.posts_made.toLocaleString()}
-                  </p>
-                </div>
-
-                {/* Engagement */}
-                <div className="p-4 bg-gradient-to-br from-pink-500/10 to-pink-500/5 border border-pink-500/20 rounded-lg">
-                  <p className="text-gray-400 text-xs font-medium mb-1">TOTAL ENGAGEMENT</p>
-                  <p className="text-2xl font-bold text-pink-400">
-                    {(stats.stats.engagement_total / 1000000).toFixed(1)}M
+                    Gen {stats.character.generation}
                   </p>
                 </div>
               </div>
             </div>
 
             {/* Legacy Bonuses */}
-            <div className="space-y-4 p-4 bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border border-yellow-500/20 rounded-lg">
-              <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                <span className="text-2xl">✨</span>
-                LEGACY BONUSES FOR GEN {stats.character.generation + 1}
-              </h3>
-              <p className="text-gray-300 text-sm">
-                Your achievements carry forward. Your next generation starts stronger.
-              </p>
-              <div className="grid grid-cols-3 gap-4 mt-4">
-                <div className="text-center">
-                  <p className="text-gray-400 text-xs mb-1">AURA</p>
-                  <p className="text-xl font-bold text-blue-400">+{stats.legacy.aura_bonus}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-gray-400 text-xs mb-1">WEALTH</p>
-                  <p className="text-xl font-bold text-green-400">+{stats.legacy.wealth_bonus.toLocaleString()}₵</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-gray-400 text-xs mb-1">FOLLOWERS</p>
-                  <p className="text-xl font-bold text-purple-400">+{stats.legacy.follower_bonus.toLocaleString()}</p>
+            {(stats.legacy.aura_bonus > 0 || stats.legacy.wealth_bonus > 0 || stats.legacy.follower_bonus > 0) && (
+              <div className="space-y-4 p-4 bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border border-yellow-500/20 rounded-lg">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                  <span className="text-2xl">✨</span>
+                  LEGACY BONUSES FOR GEN {stats.character.generation + 1}
+                </h3>
+                <p className="text-gray-300 text-sm">
+                  Your achievements carry forward. Your next generation starts stronger.
+                </p>
+                <div className="grid grid-cols-3 gap-4 mt-4">
+                  <div className="text-center">
+                    <p className="text-gray-400 text-xs mb-1">AURA</p>
+                    <p className="text-xl font-bold text-blue-400">+{stats.legacy.aura_bonus}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-gray-400 text-xs mb-1">WEALTH</p>
+                    <p className="text-xl font-bold text-green-400">+{stats.legacy.wealth_bonus.toLocaleString()}₵</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-gray-400 text-xs mb-1">FOLLOWERS</p>
+                    <p className="text-xl font-bold text-purple-400">+{stats.legacy.follower_bonus.toLocaleString()}</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Action Buttons */}
             <div className="space-y-3">
               <button
                 onClick={handleStartNextGeneration}
@@ -261,37 +220,38 @@ export default function GameOverPage() {
                 )}
               </button>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Link href="/leaderboard">
-                  <button className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-2 rounded-lg transition-all flex items-center justify-center gap-2">
-                    <Trophy className="w-4 h-4" />
-                    Leaderboard
-                  </button>
-                </Link>
-
-                <button
-                  onClick={handleSignOut}
-                  className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-2 rounded-lg transition-all"
-                >
-                  Logout
-                </button>
-              </div>
+              <button
+                onClick={handleSignOut}
+                className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-2 rounded-lg transition-all"
+              >
+                Wipe Everything & Start Fresh
+              </button>
             </div>
 
-            {/* Info Footer */}
             <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-start gap-3">
               <AlertCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
               <p className="text-blue-300 text-sm">
-                Your character data is saved forever. View your{" "}
-                <Link href="/account-history" className="underline hover:no-underline">
-                  account history
-                </Link>{" "}
-                to see all past generations.
+                Legacy bonuses from this run will apply to your next character.
               </p>
             </div>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function GameOverPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4" />
+          <p className="text-white text-lg">Loading your final stats...</p>
+        </div>
+      </div>
+    }>
+      <GameOverContent />
+    </Suspense>
   );
 }

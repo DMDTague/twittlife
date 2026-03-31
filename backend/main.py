@@ -75,6 +75,7 @@ chaos_mode_enabled = True
 async def chaos_pulse_daemon():
     """
     Phase 25: Autonomous background task that triggers NPC activity.
+    Phase 27: Also rolls for World Events (Hater Winter, Algorithm Shifts).
     """
     print("[CHAOS] Autonomous Loop Started.")
     while True:
@@ -83,6 +84,26 @@ async def chaos_pulse_daemon():
                 # Random delay to simulate organic activity
                 delay = random.randint(45, 90)
                 await asyncio.sleep(delay)
+                
+                # PHASE 27: Manage world events
+                engine.update_hater_winter()  # Check if Hater Winter should end
+                
+                # Roll for new world events (1% chance per pulse)
+                if random.random() < 0.01:
+                    if random.random() < 0.5:
+                        triggered = engine.trigger_hater_winter()
+                        if triggered:
+                            print("[CHAOS] ❄️ Hater Winter triggered by chaos pulse!")
+                    else:
+                        result = engine.trigger_algorithmic_shift()
+                        print(f"[CHAOS] 🔄 Algorithm Shift triggered! Winners: {result.get('winners', [])}")
+                
+                # Revert any expired propaganda puppets
+                for npc in state.entities.values():
+                    if not npc.is_player:
+                        engine.revert_propaganda_control(npc)
+                
+                # Regular chaos pulse
                 events = engine.orchestrate_chaos_pulse()
                 if events:
                     print(f"[CHAOS] Triggered autonomous pulse: {len(events)} events generated.")
@@ -165,7 +186,8 @@ if not saved_entities:
         archetype="The Protagonist", 
         trait_matrix=TraitMatrix(politics=0, tone=50, hostility=0),
         internal_truth={},
-        public_vibe={}
+        public_vibe={},
+        wealth=500
     )
     engine.add_entity(player)
 
@@ -234,7 +256,8 @@ def register_player(req: RegisterRequest):
         trait_matrix=TraitMatrix(politics=0, tone=50, hostility=0),
         internal_truth={},
         public_vibe={},
-        follower_count=1500
+        follower_count=1500,
+        wealth=500
     )
     engine.add_entity(new_player)
     
@@ -799,11 +822,12 @@ def get_profile(handle: str):
 
 class SettingsRequest(BaseModel):
     description: str
+    player_id: str = "player_1"
 
 @app.post("/api/settings")
 def update_settings(req: SettingsRequest):
     bio, top_traits = engine.initialize_identity_from_description(req.description)
-    player = state.entities.get("player_1")
+    player = state.entities.get(req.player_id)
     if player:
         player.private_description = req.description
         player.bio = bio
@@ -856,9 +880,6 @@ def post_tweet(req: PostTweetRequest, background_tasks: BackgroundTasks):
     from gamification import check_tier_progression
     check_tier_progression(player)
     
-    # PHASE 27: Simulate daily NPC evolution (happens on post)
-    engine.simulate_daily_npc_evolution()
-    
     # Phase 23: Update alliance score if this is a DM to a Titan
     if event_type == "dm" and req.target_ids:
         if player:
@@ -875,27 +896,34 @@ def post_tweet(req: PostTweetRequest, background_tasks: BackgroundTasks):
     # Trigger LLM responses from NPCs based on the new event
     # We run this in a background task so the frontend UI doesn't hang waiting for the LLM API to return
     async def trigger_ai_reactions(trigger_event):
-        for npc_id, npc in state.entities.items():
-            if npc_id != trigger_event.initiator_id and not npc.is_player:
+        # Cap to 5-8 random visible NPCs instead of iterating ALL 1200+
+        all_npcs = [(npc_id, npc) for npc_id, npc in state.entities.items()
+                    if npc_id != trigger_event.initiator_id and not npc.is_player]
+        random.shuffle(all_npcs)
+        
+        reaction_count = 0
+        max_reactions = random.randint(5, 8)
+        
+        for npc_id, npc in all_npcs:
+            if reaction_count >= max_reactions:
+                break
                 
-                # Critical Fix: Only generate a reaction if the NPC actually "saw" the tweet in their visibility tier
-                visible = engine.filter_events_for_entity(npc_id, [trigger_event])
-                if not visible:
-                    continue
+            # Critical Fix: Only generate a reaction if the NPC actually "saw" the tweet in their visibility tier
+            visible = engine.filter_events_for_entity(npc_id, [trigger_event])
+            if not visible:
+                continue
                     
-                # Add Stagger Logic to perfectly mimic human typing speed and avoid 429
-                delay = random.randint(2, 6)
-                await asyncio.sleep(delay)
-                reaction = engine.generate_npc_reaction(npc_id, trigger_event)
-                if reaction:
-                    engine.process_action(reaction)
+            # Add Stagger Logic to perfectly mimic human typing speed and avoid 429
+            delay = random.randint(2, 6)
+            await asyncio.sleep(delay)
+            reaction = engine.generate_npc_reaction(npc_id, trigger_event)
+            if reaction:
+                engine.process_action(reaction)
+                reaction_count += 1
     
     # Run both auto-replies and AI reactions
     background_tasks.add_task(generate_auto_replies_task, new_event)
     background_tasks.add_task(trigger_ai_reactions, new_event)
-    
-    # Randomly step game logic
-    engine.trigger_global_event_injector()
     
     # CRITICAL: Persist tweets to database immediately so they survive page refresh
     save_state_to_db()
@@ -1094,9 +1122,9 @@ def post_to_neighborhood(req: NeighborhoodPostRequest, background_tasks: Backgro
         "outsider_check": outsider_result
     }
 
-# --- Phase 16: Monetization APIs ---
+# --- Phase 16: Monetization APIs (Legacy credit-based system) ---
 
-@app.post("/api/monetize")
+@app.post("/api/monetize_credits")
 async def monetize_aura(payload: dict):
     player_id = payload.get("initiator_id", "player_1")
     player = state.entities.get(player_id)
@@ -1561,38 +1589,26 @@ def god_mode_action(req: GodModeActionRequest):
         if not target:
             raise HTTPException(status_code=404, detail="Target NPC not found")
         
-        if player.aura < 150:
+        dm_text = req.custom_message if req.custom_message else "CLASSIFIED CONTENT"
+        leak_event = engine.leak_dm(player, req.target_id, dm_text)
+        
+        if leak_event:
+            return {
+                "status": "success",
+                "action": "leak_dm",
+                "cost_paid": 150,
+                "message": f"💣 Leaked DM triggered a CRUCIBLE on {target.name}! (Failures: {target.crucible_failures}/3)",
+                "target_name": target.name,
+                "crucible_failures": target.crucible_failures,
+                "leak_event_id": leak_event.id
+            }
+        else:
             return {
                 "status": "error",
                 "message": f"Insufficient Aura! Need 150, you have {player.aura}",
                 "cost": 150,
                 "currency": "Aura"
             }
-        
-        player.aura -= 150
-        
-        # Trigger a Crucible on the target (crisis decision moment)
-        crisis_description = f"A leaked DM from you surfaced online:\n'{req.custom_message if req.custom_message else 'CLASSIFIED CONTENT'}'\n\nAll eyes on you now."
-        
-        import uuid
-        crucible_event = Event(
-            id=str(uuid.uuid4()),
-            type="crucible",
-            content=crisis_description,
-            initiator_id="SYSTEM",
-            visibility="Public",
-            target_ids=[target.id]
-        )
-        engine.process_action(crucible_event)
-        
-        return {
-            "status": "success",
-            "action": "leak_dm",
-            "cost_paid": 150,
-            "message": f"💣 Leaked DM triggered a CRUCIBLE on {target.name}!",
-            "target_name": target.name,
-            "crucible_description": crisis_description
-        }
     
     else:
         raise HTTPException(status_code=400, detail="Unknown god mode action")
@@ -1641,3 +1657,77 @@ def god_mode_edit_truth(player_id: str, target_npc_id: str, belief_key: str, old
     )
     return god_mode_action(req)
 
+@app.post("/api/god_mode/reveal_truth")
+def god_mode_reveal_truth(player_id: str, target_npc_id: str):
+    """
+    Shorthand endpoint for reveal truth action.
+    Costs 100 Aura; reveals NPC's internal beliefs, grudges, and system prompt.
+    """
+    req = GodModeActionRequest(
+        player_id=player_id,
+        action_type="reveal_truth",
+        target_id=target_npc_id
+    )
+    return god_mode_action(req)
+
+# ========== PHASE 27: NEW ACCOUNT & PLAYER STATUS ==========
+
+class NewAccountRequest(BaseModel):
+    old_account_id: str
+    new_handle: str
+
+@app.post("/api/new_account")
+def create_new_account(req: NewAccountRequest):
+    """
+    After deplatforming, player starts a new account with legacy bonuses.
+    """
+    old_account = state.entities.get(req.old_account_id)
+    if not old_account:
+        raise HTTPException(status_code=404, detail="Old account not found")
+    
+    if not old_account.is_deplatformed:
+        return {"status": "error", "message": "Account is not deplatformed. Cannot create new account."}
+    
+    new_entity = engine.start_new_account(old_account, req.new_handle)
+    
+    return {
+        "status": "success",
+        "new_handle": req.new_handle,
+        "new_entity_id": new_entity.id,
+        "generation": new_entity.legacy_generation,
+        "starting_aura": new_entity.aura,
+        "starting_wealth": new_entity.wealth,
+        "starting_followers": new_entity.follower_count,
+        "legacy_aura_bonus": old_account.legacy_aura_bonus,
+        "legacy_wealth_bonus": old_account.generational_wealth
+    }
+
+@app.get("/api/player_status")
+def get_player_status(player_id: str = "player_1"):
+    """
+    Returns account tier, tier progress, deplatform status, crucible failures,
+    and active world event info.
+    """
+    player = state.entities.get(player_id)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    
+    return {
+        "handle": player.id,
+        "name": player.name,
+        "account_tier": player.account_tier.value if hasattr(player.account_tier, 'value') else str(player.account_tier),
+        "tier_progress": player.tier_progress,
+        "is_deplatformed": player.is_deplatformed,
+        "deplatform_reason": player.deplatform_reason,
+        "crucible_failures": player.crucible_failures,
+        "legacy_generation": player.legacy_generation,
+        "legacy_aura_bonus": player.legacy_aura_bonus,
+        "generational_wealth": player.generational_wealth,
+        "aura": player.aura,
+        "wealth": player.wealth,
+        "heat": player.heat,
+        "followers": player.follower_count,
+        "toxicity_fatigue": player.toxicity_fatigue,
+        "hater_winter_active": engine.hater_winter_active,
+        "algorithm_multipliers": engine.algorithmic_topic_multipliers
+    }

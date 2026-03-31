@@ -40,6 +40,7 @@ class JobStatus(str, Enum):
     CANCELLED = "cancelled"
 
 class Entity(BaseModel):
+    model_config = {"extra": "allow"}  # Allow dynamic attrs for propaganda control, tier quests, etc.
     id: str
     name: str
     primary_niche: str = "general" # e.g., "combat_sports", "tech", "gaming", "philly_local"

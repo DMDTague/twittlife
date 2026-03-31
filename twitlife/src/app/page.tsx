@@ -52,6 +52,17 @@ export default function TitleScreen() {
   // UI State
   const [handle, setHandle] = useState("");
   const [selectedNiche, setSelectedNiche] = useState<string | null>(null);
+  
+  // Avatar Builder State
+  const [gender, setGender] = useState("male");
+  const [hairColor, setHairColor] = useState("black");
+  const [eyeColor, setEyeColor] = useState("brown");
+  const [hairstyle, setHairstyle] = useState("short");
+
+  const generatedAvatarUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
+    `A digital portrait of a ${gender} with ${hairColor} ${hairstyle} hair and ${eyeColor} eyes, high quality, cinematic lighting, realistic, symmetrical face, 4k`
+  )}?width=256&height=256&nologo=true`;
+
   const [stats, setStats] = useState({
     aura: rollStat(),
     heat: rollStat(),
@@ -85,8 +96,8 @@ export default function TitleScreen() {
 
     setIsCreating(true);
     try {
-      // Create character with legacy bonuses if available
-      createCharacter(handle, selectedNiche, stats);
+      // Create character with legacy bonuses if available and include custom avatar
+      createCharacter(handle, selectedNiche, stats, generatedAvatarUrl);
 
       // Give a moment for the state to update, then navigate
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -238,6 +249,82 @@ export default function TitleScreen() {
                   <div className="text-xs opacity-75">{niche.description}</div>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Avatar Builder */}
+          <div>
+            <label className="block text-cyan-300 font-mono mb-3 text-lg">
+              ▶ PHYSICAL ATTRIBUTES:
+            </label>
+            <div className="flex flex-col md:flex-row gap-6 bg-cyan-400/5 border border-cyan-400 p-4">
+              {/* Avatar Preview */}
+              <div className="w-32 h-32 flex-shrink-0 border-2 border-cyan-400 overflow-hidden bg-black mx-auto md:mx-0">
+                <img
+                  src={generatedAvatarUrl}
+                  alt="Avatar Preview"
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+              
+              {/* Trait Selectors */}
+              <div className="flex-1 grid grid-cols-2 gap-3 text-sm font-mono">
+                <div>
+                  <label className="block text-cyan-500 mb-1 text-xs">GENDER</label>
+                  <select
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    className="w-full bg-black border border-cyan-400 text-cyan-300 p-2 focus:outline-none focus:ring-1 focus:ring-cyan-300"
+                  >
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="non-binary person">Non-Binary</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-cyan-500 mb-1 text-xs">HAIRSTYLE</label>
+                  <select
+                    value={hairstyle}
+                    onChange={(e) => setHairstyle(e.target.value)}
+                    className="w-full bg-black border border-cyan-400 text-cyan-300 p-2 focus:outline-none focus:ring-1 focus:ring-cyan-300"
+                  >
+                    <option value="short">Short</option>
+                    <option value="long">Long</option>
+                    <option value="curly">Curly</option>
+                    <option value="messy">Messy</option>
+                    <option value="bald">Bald</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-cyan-500 mb-1 text-xs">HAIR COLOR</label>
+                  <select
+                    value={hairColor}
+                    onChange={(e) => setHairColor(e.target.value)}
+                    className="w-full bg-black border border-cyan-400 text-cyan-300 p-2 focus:outline-none focus:ring-1 focus:ring-cyan-300"
+                  >
+                    <option value="black">Black</option>
+                    <option value="brown">Brown</option>
+                    <option value="blonde">Blonde</option>
+                    <option value="red">Red</option>
+                    <option value="blue">Blue</option>
+                    <option value="pink">Pink</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-cyan-500 mb-1 text-xs">EYE COLOR</label>
+                  <select
+                    value={eyeColor}
+                    onChange={(e) => setEyeColor(e.target.value)}
+                    className="w-full bg-black border border-cyan-400 text-cyan-300 p-2 focus:outline-none focus:ring-1 focus:ring-cyan-300"
+                  >
+                    <option value="brown">Brown</option>
+                    <option value="blue">Blue</option>
+                    <option value="green">Green</option>
+                    <option value="hazel">Hazel</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
 

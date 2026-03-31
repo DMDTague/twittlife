@@ -13,6 +13,7 @@ export interface GameCharacter {
   followers: number;
   accountTier: string;
   createdAt: number;
+  avatarUrl?: string;
 }
 
 export interface LegacyData {
@@ -70,7 +71,7 @@ export function useGameState() {
   // ============================================================================
 
   const createCharacter = useCallback(
-    (handle: string, niche: string, stats: { aura: number; heat: number; insight: number }) => {
+    (handle: string, niche: string, stats: { aura: number; heat: number; insight: number }, avatarUrl?: string) => {
       const id = `char_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
       const newCharacter: GameCharacter = {
@@ -84,6 +85,7 @@ export function useGameState() {
         followers: 500 + (legacy?.followerBonus || 0),
         accountTier: "guest",
         createdAt: Date.now(),
+        avatarUrl,
       };
 
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newCharacter));

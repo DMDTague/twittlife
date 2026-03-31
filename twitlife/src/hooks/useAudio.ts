@@ -44,7 +44,7 @@ class AudioManager {
     gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
 
     osc.connect(gain);
-    gain.connect(this.masterGain);
+    gain.connect(this.masterGain!);
 
     osc.start(now);
     osc.stop(now + 0.3);
@@ -71,7 +71,7 @@ class AudioManager {
     gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
 
     osc.connect(gain);
-    gain.connect(this.masterGain);
+    gain.connect(this.masterGain!);
 
     osc.start(now);
     osc.stop(now + 0.2);
@@ -87,7 +87,7 @@ class AudioManager {
     gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
 
     osc2.connect(gain2);
-    gain2.connect(this.masterGain);
+    gain2.connect(this.masterGain!);
 
     osc2.start(now);
     osc2.stop(now + 0.15);
@@ -117,7 +117,7 @@ class AudioManager {
     gainNoise.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
 
     noise.connect(gainNoise);
-    gainNoise.connect(this.masterGain);
+    gainNoise.connect(this.masterGain!);
 
     noise.start(now);
 
@@ -133,7 +133,7 @@ class AudioManager {
     gainOsc.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
 
     osc.connect(gainOsc);
-    gainOsc.connect(this.masterGain);
+    gainOsc.connect(this.masterGain!);
 
     osc.start(now);
     osc.stop(now + 0.1);
@@ -165,7 +165,7 @@ class AudioManager {
       gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
 
       osc.connect(gain);
-      gain.connect(this.masterGain);
+      gain.connect(this.masterGain!);
 
       osc.start(time);
       osc.stop(time + duration);
@@ -184,7 +184,7 @@ class AudioManager {
     chingGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
 
     ching.connect(chingGain);
-    chingGain.connect(this.masterGain);
+    chingGain.connect(this.masterGain!);
 
     ching.start(now + 0.25);
     ching.stop(now + 0.5);
@@ -212,7 +212,7 @@ class AudioManager {
     gain.gain.exponentialRampToValueAtTime(0.01, now + 1);
 
     osc.connect(gain);
-    gain.connect(this.masterGain);
+    gain.connect(this.masterGain!);
 
     osc.start(now);
     osc.stop(now + 1);

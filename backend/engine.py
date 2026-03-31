@@ -115,7 +115,7 @@ class GameEngine:
         self.active_world_events = []
         self.algorithmic_topic_multipliers = {
             "tech": 1.0, "combat_sports": 1.0, "politics": 1.0,
-            "gaming": 1.0, "philly_local": 1.0, "finance": 1.0
+            "gaming": 1.0, "artist": 1.0, "finance": 1.0
         }
         self.hater_winter_active = False
         self.hater_winter_end_day = 0
@@ -207,6 +207,96 @@ Tweet: "{tweet_text}"
         
         if self.on_new_event:
             self.on_new_event(event)
+
+        # Apply the mathematically driven Vibe Shift if the event has impact vectors.
+        # This solidifies the "Public Vibe" perception of the initiator.
+        initiator = self.state.entities.get(event.initiator_id)
+        if initiator and event.impact_vectors:
+            alpha = 0.2 # Sensitivity Constant (how much 1 tweet shifts perception)
+            # Certainty Factor (C): A crude approximation based on follower count.
+            # Max C = 1.0 (easy to move), Min C = 0.1 (hard to move for massive accounts)
+            c_factor = max(0.1, 1.0 - (initiator.follower_count / 100000.0)) 
+            
+            for category, p_score in event.impact_vectors.items():
+                current_vibe = initiator.public_vibe.get(category, 0.0)
+                # ΔV = α * (P - V) * C
+                delta_v = alpha * (p_score - current_vibe) * c_factor
+                initiator.public_vibe[category] = current_vibe + delta_v
+                print(f"[VIBE SHIFT] {initiator.name} - {category}: {current_vibe:.1f} -> {initiator.public_vibe[category]:.1f} (P={p_score})")
+
+            # Phase 24.4: Domain Alignment & Toxicity Recovery
+            tone = event.impact_vectors.get("tone", 0.0)
+            hostility = event.impact_vectors.get("hostility", 0.0)
+            if tone > 30 and hostility < 0:
+                initiator.toxicity_fatigue = max(0, initiator.toxicity_fatigue - 2)
+                print(f"[RECOVERY] @{initiator.id} reduced Toxicity Fatigue to {initiator.toxicity_fatigue} via non-toxic post.")
+
+            # Phase 22: Protagonist Depth (Trait Drift & Life Events)
+            # Update aura_peak
+            if initiator.aura > initiator.aura_peak:
+                initiator.aura_peak = initiator.aura
+                
+            # Check 5k follower milestone for Life Events
+            target_milestone = (initiator.follower_count // 5000) * 5000
+            current_milestone = initiator.internal_truth.get('_last_milestone', 0)
+            if target_milestone > current_milestone and target_milestone > 1000:
+                initiator.internal_truth['_last_milestone'] = target_milestone
+                self.trigger_life_event(initiator, int(target_milestone))
+
+        # Phase 24.1: Decrement Aura Debt for the initiator
+        if initiator and initiator.aura_debt_posts > 0:
+            initiator.aura_debt_posts -= 1
+            print(f"[AURA DEBT] @{initiator.id} debt remaining: {initiator.aura_debt_posts}")
+
+        # Calculate Max Friction for Faction Wars & Community Notes
+        if initiator and event.impact_vectors:
+            max_friction = max([abs(s) for s in event.impact_vectors.values()] + [0])
+            
+            if abs(max_friction) > 70:
+                self.force_quote_chain(event.id, max_friction)
+                
+            if abs(max_friction) > 60 and random.random() < 0.40:  # 40% chance on big fights
+                note = random.choice(self.community_notes_dataset)
+                note_event = Event(
+                    id=str(uuid.uuid4()),
+                    type="community_note",
+                    content=f"Community Notes: {note}",
+                    initiator_id="SYSTEM",
+                    visibility="Public",
+                    reply_to_id=event.id
+                )
+                self.state.events.append(note_event)
+                print(f"[COMMUNITY NOTE] Added to post {event.id}")
+
+            # Check for Mob Rule / Cancel Culture
+            # If Aura drops too low and the post is highly polarizing, they get cancelled.
+            if initiator.follower_count < 950: # Threshold for testing
+                if not initiator.is_dogpiled or time.time() > initiator.dogpile_end_time:
+                    is_polarizing = any(abs(score) > 75 for score in event.impact_vectors.values())
+                    if is_polarizing or initiator.follower_count < 500:
+                        self.trigger_targeted_dogpile(initiator, event)
+
+        # Determine who should be impacted by this event based on visibility
+        # Limit to a subset of online NPCs to avoid Groq Rate Limits (429)
+        online_entities = [e for e in self.state.entities.values() if not e.is_player]
+        random.shuffle(online_entities)
+        
+        # We cap reactions to simulate "The Swarm" without blowing API limits
+        reaction_count = 0
+        max_entities = min(self.max_reactions_per_event, len(online_entities))
+        
+        # Real-time reaction pipeline (lightweight)
+        for entity in online_entities:
+            if reaction_count >= max_entities:
+                break
+                
+            if entity.id == event.initiator_id:
+                self._update_memory(entity, event)
+            else:
+                visible_events = self.filter_events_for_entity(entity.id, [event])
+                if visible_events:
+                    self._update_memory(entity, event)
+                    reaction_count += 1
 
     def trait_drift(self, entity: Entity, impact_vectors: dict):
         """
@@ -309,98 +399,6 @@ Tweet: "{tweet_text}"
 
     # ==========================================
     # MEMORY & SOCIAL DYNAMICS
-    
-        # Apply the mathematically driven Vibe Shift if the event has impact vectors.
-        # This solidifies the "Public Vibe" perception of the initiator.
-        initiator = self.state.entities.get(event.initiator_id)
-        if initiator and event.impact_vectors:
-            alpha = 0.2 # Sensitivity Constant (how much 1 tweet shifts perception)
-            # Certainty Factor (C): A crude approximation based on follower count.
-            # Max C = 1.0 (easy to move), Min C = 0.1 (hard to move for massive accounts)
-            c_factor = max(0.1, 1.0 - (initiator.follower_count / 100000.0)) 
-            
-            for category, p_score in event.impact_vectors.items():
-                current_vibe = initiator.public_vibe.get(category, 0.0)
-                # ΔV = α * (P - V) * C
-                delta_v = alpha * (p_score - current_vibe) * c_factor
-                initiator.public_vibe[category] = current_vibe + delta_v
-                print(f"[VIBE SHIFT] {initiator.name} - {category}: {current_vibe:.1f} -> {initiator.public_vibe[category]:.1f} (P={p_score})")
-
-            # Phase 24.4: Domain Alignment & Toxicity Recovery
-            tone = event.impact_vectors.get("tone", 0.0)
-            hostility = event.impact_vectors.get("hostility", 0.0)
-            if tone > 30 and hostility < 0:
-                initiator.toxicity_fatigue = max(0, initiator.toxicity_fatigue - 2)
-                print(f"[RECOVERY] @{initiator.id} reduced Toxicity Fatigue to {initiator.toxicity_fatigue} via non-toxic post.")
-
-            # Phase 22: Protagonist Depth (Trait Drift & Life Events)
-            # Update aura_peak
-            if initiator.aura > initiator.aura_peak:
-                initiator.aura_peak = initiator.aura
-                
-            # Check 5k follower milestone for Life Events
-            target_milestone = (initiator.follower_count // 5000) * 5000
-            current_milestone = initiator.internal_truth.get('_last_milestone', 0)
-            if target_milestone > current_milestone and target_milestone > 1000:
-                initiator.internal_truth['_last_milestone'] = target_milestone
-                self.trigger_life_event(initiator, int(target_milestone))
-
-        # Phase 24.1: Decrement Aura Debt for the initiator
-        if initiator and initiator.aura_debt_posts > 0:
-            initiator.aura_debt_posts -= 1
-            print(f"[AURA DEBT] @{initiator.id} debt remaining: {initiator.aura_debt_posts}")
-
-            # Calculate Max Friction for Faction Wars & Community Notes
-            max_friction = max([abs(s) for s in event.impact_vectors.values()] + [0])
-            
-            if abs(max_friction) > 70:
-                self.force_quote_chain(event.id, max_friction)
-                
-            if abs(max_friction) > 60 and random.random() < 0.40:  # 40% chance on big fights
-                note = random.choice(self.community_notes_dataset)
-                import uuid
-                note_event = Event(
-                    id=str(uuid.uuid4()),
-                    type="community_note",
-                    content=f"Community Notes: {note}",
-                    initiator_id="SYSTEM",
-                    visibility="Public",
-                    reply_to_id=event.id
-                )
-                self.state.events.append(note_event)
-                print(f"[COMMUNITY NOTE] Added to post {event.id}")
-
-            # Check for Mob Rule / Cancel Culture
-            # If Aura drops too low and the post is highly polarizing, they get cancelled.
-            import time
-            if initiator.follower_count < 950: # Threshold for testing
-                if not initiator.is_dogpiled or time.time() > initiator.dogpile_end_time:
-                    is_polarizing = any(abs(score) > 75 for score in event.impact_vectors.values())
-                    if is_polarizing or initiator.follower_count < 500:
-                        self.trigger_targeted_dogpile(initiator, event)
-
-        # Determine who should be impacted by this event based on visibility
-        # Limit to a subset of online NPCs to avoid Groq Rate Limits (429)
-        import random
-        online_entities = [e for e in self.state.entities.values() if not e.is_player]
-        random.shuffle(online_entities)
-        
-        # We cap reactions to simulate "The Swarm" without blowing API limits
-        reaction_count = 0
-        max_entities = min(self.max_reactions_per_event, len(online_entities))
-        
-        # Real-time reaction pipeline (lightweight)
-        for entity in online_entities:
-            if reaction_count >= max_entities:
-                break
-                
-            if entity.id == event.initiator_id:
-                self._update_memory(entity, event)
-            else:
-                visible_events = self.filter_events_for_entity(entity.id, [event])
-                if visible_events:
-                    self._update_memory(entity, event)
-                    reaction_count += 1
 
     def _update_memory(self, entity: Entity, event: Event):
         """
@@ -643,6 +641,7 @@ Tweet: "{tweet_text}"
                 entity.toxicity_fatigue = max(0, entity.toxicity_fatigue - 1)
             
             # Phase 24.1: Decay Buffs/Debt
+            if entity.momentum_buff_days > 0:
                 entity.momentum_buff_days -= 1
                 
             # Phase 24.4: Griefing Account Detection & Aura Ceiling
@@ -847,8 +846,8 @@ Tweet: "{tweet_text}"
         winner.momentum_buff_days = 3
         # Loser's Penalty: Neutral collapse & Aura Debt
         migration = int(loser.neutral_count * 0.2 * penalty_multiplier)
-        loser.follower_count -= migration
-        loser.neutral_count -= migration
+        loser.follower_count = max(0, loser.follower_count - migration)
+        loser.neutral_count = max(0, loser.neutral_count - migration)
         loser.aura_debt_posts = int(5 * penalty_multiplier)
         
         if is_cross_niche:
@@ -941,18 +940,18 @@ Tweet: "{tweet_text}"
                 if event:
                     self.process_action(event)
                 
-                # 2. Assign 2-5 random replies/likes from other NPCs to jumpstart velocity
-                num_reactors = random.randint(2, 5)
-                reactors = random.sample([n for n in npcs if n.id != poster.id], min(num_reactors, len(npcs)-1))
-                for r in reactors:
-                    if random.random() < 0.5:
-                        event.likes.append(r.id)
-                    elif random.random() < 0.2:
-                        event.retweets.append(r.id)
-                    elif random.random() < 0.3:
-                        reply = self.generate_npc_reaction(r.id, event)
-                        if reply:
-                            self.process_action(reply)
+                    # 2. Assign 2-5 random replies/likes from other NPCs to jumpstart velocity
+                    num_reactors = random.randint(2, 5)
+                    reactors = random.sample([n for n in npcs if n.id != poster.id], min(num_reactors, len(npcs)-1))
+                    for r in reactors:
+                        if random.random() < 0.5:
+                            event.likes.append(r.id)
+                        elif random.random() < 0.2:
+                            event.retweets.append(r.id)
+                        elif random.random() < 0.3:
+                            reply = self.generate_npc_reaction(r.id, event)
+                            if reply:
+                                self.process_action(reply)
                             
         print(f"[SIMULATION] Background tick complete. {num_posters} new threads created and populated.")
 
@@ -1498,10 +1497,12 @@ You MUST output a valid JSON object matching this schema exactly:
                         reply_to_id=post_id
                     )
                     # We invoke LLM reaction if possible to make it real
-                    real_react = self.generate_npc_reaction(bot.id, next(ev for ev in self.state.events if ev.id == post_id))
-                    if real_react:
-                        self.process_action(real_react)
-                        print(f"[FACTION WAR] {bot.name} joined the quote chain on post {post_id}")
+                    trigger_ev = next((ev for ev in self.state.events if ev.id == post_id), None)
+                    if trigger_ev:
+                        real_react = self.generate_npc_reaction(bot.id, trigger_ev)
+                        if real_react:
+                            self.process_action(real_react)
+                            print(f"[FACTION WAR] {bot.name} joined the quote chain on post {post_id}")
 
     def trigger_targeted_dogpile(self, target_entity: Entity, trigger_event: Event):
         """
@@ -2013,18 +2014,20 @@ You MUST output a valid JSON object matching this schema exactly:
             
             # Hate threshold: auto-reply with negativity
             if relationship_score <= -80 and random.random() < 0.6:  # 60% chance
-                aggressive_reply = self.generate_autonomous_post(npc_id, topic=post_event.impact_vectors.keys() if post_event.impact_vectors else "general")
+                topic = list(post_event.impact_vectors.keys())[0] if post_event.impact_vectors else "general"
+                aggressive_reply = self.generate_autonomous_post(npc, topic=topic)
                 if aggressive_reply:
                     aggressive_reply.reply_to_id = post_event.id
                     auto_reply_events.append(aggressive_reply)
                     
                     # Deepen relationship (haters reinforce hate)
                     new_score = int(relationship_score * 0.95) - 5  # Slight further decay
-                    player.long_term_memory.relationship_matrix[npc_id] = min(-100, new_score)
+                    player.long_term_memory.relationship_matrix[npc_id] = max(-100, new_score)
             
             # Love threshold: auto-reply with support
             elif relationship_score >= 80 and random.random() < 0.4:
-                supportive_reply = self.generate_autonomous_post(npc_id, topic=list(post_event.impact_vectors.keys())[0] if post_event.impact_vectors else "general")
+                topic = list(post_event.impact_vectors.keys())[0] if post_event.impact_vectors else "general"
+                supportive_reply = self.generate_autonomous_post(npc, topic=topic)
                 if supportive_reply:
                     supportive_reply.reply_to_id = post_event.id
                     auto_reply_events.append(supportive_reply)
@@ -2056,7 +2059,7 @@ You MUST output a valid JSON object matching this schema exactly:
         if self.hater_winter_active:
             return False  # Already active
         
-        if random.random() > 0.01:  # 1% trigger chance
+        if random.random() > 0.05:  # 5% trigger chance when called
             return False
         
         # Activate Hater Winter
@@ -2069,8 +2072,8 @@ You MUST output a valid JSON object matching this schema exactly:
                 original = npc.trait_matrix.hostility
                 npc.trait_matrix.hostility = min(100, int(npc.trait_matrix.hostility * 1.5))
                 # Track boost for later reset
-                if not hasattr(npc, '_original_hostility'):
-                    npc._original_hostility = original
+                if '_original_hostility' not in npc.internal_truth:
+                    npc.internal_truth['_original_hostility'] = original
         
         print(f"[WORLD EVENT] ❄️ HATER WINTER BEGINS! Duration: {duration_days} days")
         print(f"[WORLD EVENT] All NPC hostility +50%. Generation of heat multiplied by 2x.")
@@ -2084,8 +2087,8 @@ You MUST output a valid JSON object matching this schema exactly:
         if self.hater_winter_active and self.current_day >= self.hater_winter_end_day:
             # Revert hostility
             for npc in self.state.entities.values():
-                if hasattr(npc, '_original_hostility'):
-                    npc.trait_matrix.hostility = npc._original_hostility
+                if '_original_hostility' in npc.internal_truth:
+                    npc.trait_matrix.hostility = int(npc.internal_truth.pop('_original_hostility'))
             
             self.hater_winter_active = False
             print(f"[WORLD EVENT] ❄️ Hater Winter ends. The world goes back to normal.")
@@ -2197,3 +2200,129 @@ DO NOT BREAK CHARACTER. This is real. You are being controlled."""
                 return True
         
         return False
+    
+    # ========== PHASE 27: GOD MODE - REVEAL & EDIT INTERNAL TRUTH ==========
+    
+    def reveal_internal_truth(self, player: Entity, target_npc_id: str) -> dict:
+        """
+        Cost: 100 Aura
+        Reveals target NPC's system prompt, core beliefs, grudges, and internal truth.
+        """
+        cost = 100
+        if player.aura < cost:
+            return {"error": f"Need {cost} Aura (you have {player.aura})", "cost": cost}
+        
+        target = self.state.entities.get(target_npc_id)
+        if not target:
+            return {"error": "NPC not found"}
+        
+        player.aura -= cost
+        
+        return {
+            "status": "revealed",
+            "system_prompt": target.system_prompt_lock[:150] + "..." if target.system_prompt_lock else "(no locked prompt)",
+            "core_beliefs": target.long_term_memory.core_beliefs[:3],
+            "grudges": target.long_term_memory.grudges[:3],
+            "internal_truth": {k: v for k, v in list(target.internal_truth.items())[:10]},
+            "hidden_relationships": {k: v for k, v in list(target.long_term_memory.relationship_matrix.items())[:10]},
+            "aura_remaining": player.aura
+        }
+    
+    def edit_internal_truth_word(self, player: Entity, target_npc_id: str,
+                                belief_key: str, old_word: str, new_word: str) -> dict:
+        """
+        Cost: 200 Aura
+        Changes one word in an NPC's internal belief.
+        E.g., "Phil's biggest fan" → "Phil's worst enemy"
+        """
+        cost = 200
+        if player.aura < cost:
+            return {"success": False, "error": f"Need {cost} Aura (you have {player.aura})"}
+        
+        target = self.state.entities.get(target_npc_id)
+        if not target:
+            return {"success": False, "error": "NPC not found"}
+        
+        if belief_key not in target.internal_truth:
+            return {"success": False, "error": f"Belief key '{belief_key}' not found in {target.name}'s truth"}
+        
+        old_val = str(target.internal_truth[belief_key])
+        if old_word not in old_val:
+            return {"success": False, "error": f"Word '{old_word}' not found in belief '{belief_key}'"}
+        
+        new_val = old_val.replace(old_word, new_word, 1)
+        target.internal_truth[belief_key] = new_val
+        player.aura -= cost
+        
+        # Log the edit
+        event = Event(
+            id=str(uuid.uuid4()),
+            type="truth_edit",
+            content=f"✏️ {player.name} rewrote {target.name}'s truth: '{old_word}' → '{new_word}'",
+            initiator_id=player.id,
+            visibility="Private",
+            timestamp=time.time()
+        )
+        self.state.events.append(event)
+        
+        print(f"[EDIT TRUTH] {player.name} modified {target.name}: '{old_word}' → '{new_word}'")
+        
+        return {
+            "success": True,
+            "message": f"Truth rewritten: '{old_word}' → '{new_word}'",
+            "belief_key": belief_key,
+            "new_value": new_val,
+            "aura_remaining": player.aura
+        }
+    
+    # ========== PHASE 27: GOD MODE - LEAK DM ==========
+    
+    def leak_dm(self, player: Entity, target_npc_id: str, 
+                leaked_dm_text: str) -> Optional[Event]:
+        """
+        Cost: 150 Aura
+        Leaks a fabricated DM from the target NPC.
+        Triggers a Crucible for the TARGET (not the player).
+        """
+        cost = 150
+        if player.aura < cost:
+            print(f"[LEAK] {player.name} can't afford leak (need {cost} Aura, have {player.aura})")
+            return None
+        
+        target = self.state.entities.get(target_npc_id)
+        if not target:
+            return None
+        
+        player.aura -= cost
+        
+        # Create public leak event
+        leak_event = Event(
+            id=str(uuid.uuid4()),
+            type="dm_leak",
+            content=f"🔓 LEAKED DM from @{target.name}:\n\n\"{leaked_dm_text}\"",
+            initiator_id="SYSTEM",
+            visibility="Public",
+            timestamp=time.time()
+        )
+        self.state.events.append(leak_event)
+        
+        # Crucible punishment for the target
+        target.crucible_failures += 1
+        target.aura = max(0, target.aura - 500)
+        target.heat = min(100, target.heat + 30)
+        
+        # Create crucible notification for target
+        crucible_event = Event(
+            id=str(uuid.uuid4()),
+            type="crucible",
+            content=f"⚠️ {target.name}, you're in a CRUCIBLE! A leaked DM is spreading. Your reputation is on the line.",
+            initiator_id="SYSTEM",
+            visibility="Private",
+            target_ids=[target.id],
+            timestamp=time.time()
+        )
+        self.state.events.append(crucible_event)
+        
+        print(f"[LEAK DM] {player.name} leaked DM from {target.name}. Crucible failures: {target.crucible_failures}/3")
+        
+        return leak_event

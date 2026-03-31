@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, MessageCircle, Repeat2, Heart, BarChart2, CheckCircle, MoreHorizontal, Share } from "lucide-react";
 
-const API = "https://twitlife-production.up.railway.app";
+const API = process.env.NEXT_PUBLIC_API_URL || "https://twitlife-production.up.railway.app";
 
 function timeAgo(ts: number): string {
     if (!ts) return "Now";

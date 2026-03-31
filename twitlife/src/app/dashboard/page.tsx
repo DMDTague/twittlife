@@ -7,7 +7,7 @@ import { useGameState } from '@/hooks/useGameState';
 import { useAudio } from '@/hooks/useAudio';
 
 
-const API = 'https://twitlife-production.up.railway.app';
+const API = process.env.NEXT_PUBLIC_API_URL || 'https://twitlife-production.up.railway.app';
 
 function stableViews(id: string): number {
   let hash = 0;
@@ -28,7 +28,7 @@ type Identity = { handle: string; name: string; desc: string; profile_image_url?
 
 export default function TwitLife() {
   const router = useRouter();
-  const { character, deplatform, updateCharacter } = useGameState();
+  const { character, deplatform, updateCharacter, createCharacter } = useGameState();
   const { postWhoosh, statDing, glitch, chaChing } = useAudio();
 
   // If no character, send back to title screen
@@ -147,40 +147,32 @@ export default function TwitLife() {
   const [availableNPCs, setAvailableNPCs] = useState<any[]>([]);
 
   useEffect(() => {
-    // Phase 25: Support entity_id from URL to override localStorage
-    const params = new URLSearchParams(window.location.search);
-    const urlEntityId = params.get('entity_id');
-
-    if (urlEntityId) {
-      // Don't set identity yet; wait for verifyIdentity to check if profile exists
-      verifyIdentity(urlEntityId);
+    // Derive identity from useGameState character (single source of truth)
+    if (character) {
+      const derived: Identity = {
+        handle: character.handle,
+        name: character.handle, // Use handle as display name
+        desc: "",
+        profile_image_url: character.avatarUrl,
+      };
+      setIdentity(derived);
+      // Also sync to twitlife_identity for backward compatibility with API
+      localStorage.setItem("twitlife_identity", JSON.stringify(derived));
     } else {
-      const stored = localStorage.getItem("twitlife_identity");
-      if (stored) {
-        try { setIdentity(JSON.parse(stored)); } catch { }
+      // Fallback: Support entity_id from URL or legacy localStorage
+      const params = new URLSearchParams(window.location.search);
+      const urlEntityId = params.get('entity_id');
+      if (urlEntityId) {
+        setIdentity({ handle: urlEntityId, name: urlEntityId, desc: "" });
+      } else {
+        const stored = localStorage.getItem("twitlife_identity");
+        if (stored) {
+          try { setIdentity(JSON.parse(stored)); } catch { }
+        }
       }
     }
     setHasHydrated(true);
-  }, []);
-
-  const verifyIdentity = async (handle: string) => {
-    try {
-      const resp = await fetch(`${API}/api/timeline?entity_id=${handle}`, {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache'
-        }
-      });
-      if (resp.ok) {
-        setIdentity({ handle, name: handle, desc: "" });
-      } else {
-        setIdentity(null);
-      }
-    } catch {
-      setIdentity(null);
-    }
-  };
+  }, [character]);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [retweetedPosts, setRetweetedPosts] = useState<Set<string>>(new Set());
   const composeRef = useRef<HTMLTextAreaElement>(null);
@@ -410,6 +402,7 @@ export default function TwitLife() {
   // === ACTIONS ===
   const handlePost = async () => {
     if (!postContent.trim()) return;
+    postWhoosh(); // Sound effect
     const tempMediaUrl = attachMedia ? `https://image.pollinations.ai/prompt/${encodeURIComponent(postContent + " realistic photograph cinematic lighting")}` : null;
     const tempPost = { id: Math.random().toString(), initiator_id: identity?.handle || "player", initiator_name: identity?.name || "Player", content: postContent, timestamp: Date.now() / 1000, likes_count: 0, retweets_count: 0, replies_count: 0, media_url: tempMediaUrl };
     setEvents([tempPost, ...events]);
@@ -426,17 +419,24 @@ export default function TwitLife() {
       if (!response.ok) {
         console.error("[POST_TWEET_ERROR]", response.status, data);
         setPostStatus("error");
+        glitch(); // Error sound
+        setEvents(prev => prev.filter((p: any) => p.id !== tempPost.id));
         return;
       }
       setPostStatus("success"); 
+      statDing(); // Success sound
       
-      // Phase 27: Emit stat float for +Aura on success
+      const realPost = data.event || data;
+      setEvents(prev => prev.map((p: any) => p.id === tempPost.id ? realPost : p));
+      
       if (data.tier_progress !== undefined) {
         addStatFloat('+10 Aura', '#1D9BF0');
       }
     } catch (e) { 
       console.error("[POST_TWEET_EXCEPTION]", e);
       setPostStatus("error"); 
+      glitch(); // Error sound
+      setEvents(prev => prev.filter((p: any) => p.id !== tempPost.id));
     }
     setTimeout(() => { setPostStatus(null); }, 3000);
   };
@@ -475,7 +475,7 @@ export default function TwitLife() {
   const handleMonetize = async () => {
     try {
       const r = await fetch(`${API}/api/monetize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initiator_id: identity?.handle || "player_1" }) });
-      const d = await r.json(); if (r.ok) { setPlayerCredits(d.credits); setPlayerAura(d.aura); } else { alert(d.detail || "Failed"); }
+      const d = await r.json(); if (r.ok) { setPlayerCredits(d.credits); setPlayerAura(d.aura); chaChing(); } else { alert(d.detail || "Failed"); }
     } catch { }
   };
 
@@ -485,7 +485,7 @@ export default function TwitLife() {
     if (!latestPost) { alert("Post something first!"); return; }
     try {
       const r = await fetch(`${API}/api/buy_bots`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initiator_id: identity?.handle || "player_1", event_id: latestPost.id }) });
-      const d = await r.json(); if (r.ok) { setPlayerCredits(d.credits); alert(`🚨 Swarm Deployed`); } else { alert(d.detail || "Failed"); }
+      const d = await r.json(); if (r.ok) { setPlayerCredits(d.credits); chaChing(); alert(`🚨 Swarm Deployed`); } else { alert(d.detail || "Failed"); }
     } catch { }
   };
 
@@ -1016,15 +1016,18 @@ export default function TwitLife() {
 
           <button
             onClick={async () => {
-              const handle = setupHandle || 'player_1'; const name = setupName || 'Player';
+              const h = setupHandle || 'player_1'; const name = setupName || 'Player';
               try {
                 await fetch(`${API}/api/register`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ handle, name, description: setupDesc, primary_niche: selectedNiche })
+                  body: JSON.stringify({ handle: h, name, description: setupDesc, primary_niche: selectedNiche })
                 });
               } catch { }
-              const newIdentity = { handle, name, desc: setupDesc, niche: selectedNiche };
+              // Create character in unified game state
+              const stats = { aura: 50, heat: 50, insight: 50 };
+              createCharacter(h, selectedNiche, stats);
+              const newIdentity = { handle: h, name, desc: setupDesc, niche: selectedNiche };
               setIdentity(newIdentity);
               localStorage.setItem("twitlife_identity", JSON.stringify(newIdentity));
             }}

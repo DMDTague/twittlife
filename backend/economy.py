@@ -6,6 +6,7 @@ def process_supporter_conversion(entity: Entity, new_followers: int):
     """
     Called when an entity gains followers. 
     Each new follower has a probabilistic chance to convert into a paying supporter.
+    Uses batch random sampling for performance (avoids per-follower loop).
     """
     if new_followers <= 0:
         return
@@ -14,14 +15,15 @@ def process_supporter_conversion(entity: Entity, new_followers: int):
     t2_chance = 0.005
     t3_chance = 0.0005
     
-    for _ in range(new_followers):
-        roll = random.random()
-        if roll < t3_chance:
-            entity.t3_supporters += 1
-        elif roll < t2_chance:
-            entity.t2_supporters += 1
-        elif roll < t1_chance:
-            entity.t1_supporters += 1
+    # Batch conversion using binomial sampling instead of per-follower loop
+    import numpy as np
+    t3_new = int(np.random.binomial(new_followers, t3_chance))
+    t2_new = int(np.random.binomial(new_followers - t3_new, t2_chance))
+    t1_new = int(np.random.binomial(new_followers - t3_new - t2_new, t1_chance))
+    
+    entity.t3_supporters += t3_new
+    entity.t2_supporters += t2_new
+    entity.t1_supporters += t1_new
 
 def calculate_niche_income(entity: Entity) -> Dict[str, any]:
     """

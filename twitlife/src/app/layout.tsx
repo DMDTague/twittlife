@@ -4,7 +4,7 @@ import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata: Metadata = {
   title: "TwitLife",
-  description: "AI Social Simulation",
+  description: "AI Social Simulation — Build your digital dynasty",
 };
 
 export default function RootLayout({
@@ -14,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased min-h-screen bg-navy text-text-main">
+      <body className="antialiased min-h-screen bg-black text-white">
         <AuthProvider>
           {children}
         </AuthProvider>
