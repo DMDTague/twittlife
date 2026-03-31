@@ -58,9 +58,10 @@ export default function TitleScreen() {
   const [hairColor, setHairColor] = useState("black");
   const [eyeColor, setEyeColor] = useState("brown");
   const [hairstyle, setHairstyle] = useState("short");
+  const [skinTone, setSkinTone] = useState("light");
 
   const generatedAvatarUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
-    `A digital portrait of a ${gender} with ${hairColor} ${hairstyle} hair and ${eyeColor} eyes, high quality, cinematic lighting, realistic, symmetrical face, 4k`
+    `A vibrant 2D cartoon avatar portrait of a ${gender} with ${skinTone} skin, ${hairColor} ${hairstyle} hair and ${eyeColor} eyes, flat vector art style, clean lines, vibrant colors, solid white background`
   )}?width=256&height=256&nologo=true`;
 
   const [stats, setStats] = useState({
@@ -280,6 +281,21 @@ export default function TitleScreen() {
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                     <option value="non-binary person">Non-Binary</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-cyan-500 mb-1 text-xs">SKIN TONE</label>
+                  <select
+                    value={skinTone}
+                    onChange={(e) => setSkinTone(e.target.value)}
+                    className="w-full bg-black border border-cyan-400 text-cyan-300 p-2 focus:outline-none focus:ring-1 focus:ring-cyan-300"
+                  >
+                    <option value="pale">Pale</option>
+                    <option value="light">Light</option>
+                    <option value="medium">Medium</option>
+                    <option value="olive">Olive</option>
+                    <option value="brown">Brown</option>
+                    <option value="dark">Dark</option>
                   </select>
                 </div>
                 <div>
