@@ -87,6 +87,123 @@ def _call_openrouter_with_retries(client, model, messages, max_tokens=200, tempe
 
 RECENT_PROCEDURAL_REPLIES = set()
 
+def synthesize_direct_tweet_reply(raw_user_text: str, system_text: str) -> str:
+    # Extract tweet content inside quotes or headers if present
+    content = raw_user_text
+    lower_user = raw_user_text.lower()
+    
+    if "post content: '" in lower_user:
+        start = lower_user.find("post content: '") + len("post content: '")
+        end = raw_user_text.find("'", start)
+        if end != -1:
+            content = raw_user_text[start:end]
+    elif 'post content: "' in lower_user:
+        start = lower_user.find('post content: "') + len('post content: "')
+        end = raw_user_text.find('"', start)
+        if end != -1:
+            content = raw_user_text[start:end]
+    elif "new tweet to react to:" in lower_user:
+        parts = raw_user_text.split("\n")
+        for p in parts:
+            if p.lower().startswith("content:") or "post content:" in p.lower():
+                content = p.split(":", 1)[-1].strip().strip("'\"")
+
+    content_clean = content.strip().rstrip(".!?")
+    content_lower = content_clean.lower()
+    
+    # Filter stopwords to get key subject nouns
+    stopwords = {"the", "and", "that", "this", "with", "have", "from", "for", "you", "your", "they", "them", "what", "how", "why", "who", "when", "where", "just", "about", "some", "like", "into"}
+    words = [w for w in content_lower.split() if len(w) > 2 and w not in stopwords]
+    subject = words[-1] if words else "that"
+    
+    # Dynamic Direct Synthesizers matching exact user tweet intent
+    if any(k in content_lower for k in ["how we doing", "how are we", "how's it going", "how you doing", "how are you"]):
+        options = [
+            "doing alright, just trying to survive today honestly 😭",
+            "doing better now that the timeline is active! how about you?",
+            "waiting on delivery that's 45 mins late 😭",
+            "currently 3 coffees deep and holding on by a thread lol",
+            "hanging in there! what's the plan for today?",
+            "staring at my screen pretending to work, so the usual 💀",
+        ]
+    elif any(k in content_lower for k in ["eating", "food", "dinner", "lunch", "breakfast", "burger", "pizza", "coffee", "hoagie", "wawa"]):
+        options = [
+            f"solid choice with {content_clean}! drop the spot",
+            f"is {subject} actually good or are we just hungry? 💀",
+            f"saving this spot! nothing beats good {subject} in the city",
+            f"{content_clean} at this hour is elite behavior fr 🍕",
+            f"wawa hoagie or local spot for that {subject}?",
+        ]
+    elif any(k in content_lower for k in ["wear", "outfit", "fit", "drip", "clothes", "style"]):
+        options = [
+            "sweatpants & a hoodie, don't overcomplicate it lol",
+            "whatever gives maximum main character energy today ✨",
+            "depends, are we braving the SEPTA commute or working from home?",
+            "all black, classic Philly uniform",
+        ]
+    elif any(k in content_lower for k in ["code", "coding", "built", "launch", "app", "dev", "shipped", "project", "repo"]):
+        options = [
+            f"huge milestone! what's the tech stack behind {subject}?",
+            "commit and push before anything breaks! 🚀",
+            "take a break and drink some water bro 😭",
+            f"let's go! super excited to see {subject} in action",
+            "VCs sliding into DMs as we speak",
+        ]
+    elif any(k in content_lower for k in ["tired", "sleep", "exhausted", "awake", "bed", "nap"]):
+        options = [
+            "currently 4 hours of sleep deep, I feel your pain 😭",
+            "turn off the screen and get some rest bro",
+            "trying to calculate how many hours I'll get if I sleep right now lol",
+            "living off pure coffee and delusion at this point",
+        ]
+    elif any(k in content_lower for k in ["why", "how", "what", "where", "who", "?"]):
+        options = [
+            f"asking the real questions about {subject} 🗣️",
+            f"simplest answer regarding {subject}: skill issue 💀",
+            f"nobody knows the answer to {subject} but it's provocative!",
+            "don't ask questions you aren't ready for the answer to lol",
+            f"the math ain't mathing on {subject} chief",
+        ]
+    elif "severely violates your core belief" in system_text.lower() or "must attack them" in system_text.lower():
+        options = [
+            f"Imagine actually believing {content_clean} in 2026. Absolute nonsense.",
+            "Ratio incoming. Delete this before it gets worse.",
+            "Source: trust me bro. Classic bad faith take.",
+            "Zero research, maximum confidence. Classic timeline behavior.",
+        ]
+    elif len(words) > 0:
+        options = [
+            f"valid point about {subject} tbh",
+            f"real ones know {content_clean} hits different",
+            f"couldn't agree more about {subject} 🙌",
+            f"say it louder for the people in the back regarding {subject} 🗣️",
+            f"this take on {subject} is unmatched today lmao",
+            f"saving this tweet about {subject} for later",
+        ]
+    else:
+        options = [
+            "waiting on delivery that's 45 mins late 😭",
+            "currently 3 coffees deep and haven't accomplished a single thing today",
+            "living off 4 hours of sleep and pure delusion right now",
+            "say it louder for the people in the back 🗣️",
+        ]
+
+    # Filter out recently used options to prevent duplicate replies in the same session
+    available = [opt for opt in options if opt not in RECENT_PROCEDURAL_REPLIES]
+    if not available:
+        available = options
+        RECENT_PROCEDURAL_REPLIES.clear()
+        
+    reply = random.choice(available)
+    RECENT_PROCEDURAL_REPLIES.add(reply)
+    if len(RECENT_PROCEDURAL_REPLIES) > 40:
+        try:
+            RECENT_PROCEDURAL_REPLIES.pop()
+        except KeyError:
+            pass
+
+    return reply
+
 def generate_procedural_fallback(messages):
     system_text = ""
     user_text = ""
@@ -101,109 +218,7 @@ def generate_procedural_fallback(messages):
                 elif role == "user":
                     user_text += content + " "
 
-    user_lower = user_text.lower()
-    system_lower = system_text.lower()
-    
-    # 1. Check-in / Casual Greetings ("how we doing", "how's it going", "sup", "yo", "whats up", "what's up", "hey", "hi", "gm")
-    if any(w in user_lower for w in ["how we doing", "how's it going", "how are we", "sup", "yo", "whats up", "what's up", "hey", "hi ", "gm ", "good morning"]):
-        options = [
-            "waiting on delivery that's 45 mins late 😭",
-            "staring at DoorDash watching my driver take a random 20 min detour 💀",
-            "currently 3 coffees deep and haven't accomplished a single thing today",
-            "trying to figure out why I'm still awake fr 😭",
-            "living off 4 hours of sleep and pure delusion right now",
-            "bro I've been stuck in traffic on the Schuylkill for an hour",
-            "trying to decide if $25 for a smoothie is financial self-harm",
-            "staring at an open doc hoping it writes itself lol",
-            "just spilled iced coffee on my favorite shirt so that's great",
-            "wondering if anyone actually reads emails or if we're all pretending",
-            "in a battle of endurance with my laptop battery at 4%",
-            "my stomach is making sounds I've never heard before 😭",
-            "waiting for 5pm like it's a military rescue operation",
-            "currently procrastinating by checking this app every 30 seconds",
-            "chilling at Wawa grabbing an iced coffee, you?",
-            "trying to calculate how many hours of sleep I'll get if I fall asleep right now",
-            "my phone just hit 1% pray for me",
-            "already ruined my posture for the day",
-            "chilling! trying to figure out what to order for dinner 🍕",
-        ]
-    # 2. Questions ("why", "how", "what", "where", "who", "when", "?")
-    elif "?" in user_lower or any(w in user_lower for w in ["why", "how", "what", "where", "who", "when"]):
-        options = [
-            "asking the real questions here 🗣️",
-            "nobody knows but it's provocative!",
-            "simplest answer: skill issue 💀",
-            "don't ask questions you aren't ready for the answer to lol",
-            "big if true, huge if false",
-            "asking for a friend or yourself? 🤔",
-            "we'll find out on the next episode of this timeline",
-            "hard to say, but I'm placing my bets now 🎯",
-            "the math ain't mathing on this one chief",
-            "because Philly is built different fr",
-        ]
-    # 3. Sports & Local Culture ("birds", "eagles", "sixers", "phillies", "wawa", "septa", "jawn")
-    elif any(w in user_lower for w in ["birds", "eagles", "sixers", "phillies", "wawa", "septa", "jawn"]):
-        options = [
-            "GO BIRDS 🦅🦅🦅",
-            "Wawa hoagie hits different at 2am no cap",
-            "SEPTA delayed again, water is wet 😭",
-            "Trust the Process 🔔",
-            "real ones know Jim's over Pat's or Geno's any day",
-            "that jawn is iconic fr",
-            "pretzels and Wawa iced tea is peak nutrition",
-        ]
-    # 4. Tech / Crypto / Startup / VC
-    elif any(w in user_lower for w in ["tech", "crypto", "ai", "b2b", "saas", "startup", "vc", "founder", "build"]):
-        options = [
-            "drop the tech stack immediately 💻",
-            "VCs sliding into DMs as we speak",
-            "bro thinks he's Steve Jobs 💀",
-            "ship fast, break things, post about it on Twitter",
-            "is this B2B SaaS or just vibes?",
-            "adding this to my pitch deck slide #4",
-        ]
-    # 5. System Prompt Relationship Overrides (Haters vs Lovers)
-    elif "severely violates your core belief" in system_lower or "must attack them" in system_lower:
-        options = [
-            "Imagine actually believing this in 2026. Absolute nonsense.",
-            "Ratio incoming. Delete this before it gets worse.",
-            "Source: trust me bro. Classic bad faith take.",
-            "Zero research, maximum confidence. Classic timeline behavior.",
-        ]
-    elif "aligns perfectly with your views" in system_lower or "wholesome" in system_lower:
-        options = [
-            "Honestly love seeing this energy! Keep going! ✨",
-            "So true! Couldn't agree more with this take 🙌",
-            "This made my day, absolutely iconic post 🔥",
-            "Sending positive vibes to the timeline ❤️",
-        ]
-    else:
-        options = [
-            "waiting on delivery that's 45 mins late 😭",
-            "currently 3 coffees deep and haven't accomplished a single thing today",
-            "staring at an open doc hoping it writes itself lol",
-            "living off 4 hours of sleep and pure delusion right now",
-            "valid point tbh, let me grab some coffee and think about it ☕",
-            "saving this for later when it inevitably goes viral",
-            "classic Philly internet energy right here",
-            "couldn't have said it better myself 🙌",
-            "say it louder for the people in the back 🗣️",
-        ]
-    
-    # Filter out recently used options to prevent duplicate replies in the same session
-    available = [opt for opt in options if opt not in RECENT_PROCEDURAL_REPLIES]
-    if not available:
-        available = options
-        RECENT_PROCEDURAL_REPLIES.clear()
-        
-    tweet = random.choice(available)
-    RECENT_PROCEDURAL_REPLIES.add(tweet)
-    if len(RECENT_PROCEDURAL_REPLIES) > 40:
-        try:
-            RECENT_PROCEDURAL_REPLIES.pop()
-        except KeyError:
-            pass
-
+    tweet = synthesize_direct_tweet_reply(user_text, system_text)
     impact = random.randint(-5, 10)
     fallback_content = json.dumps({"tweet": tweet, "impact_score": impact})
     return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=fallback_content))], usage=SimpleNamespace(total_tokens=0))
