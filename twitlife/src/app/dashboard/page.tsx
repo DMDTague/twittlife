@@ -9,9 +9,11 @@ import { useAudio } from '@/hooks/useAudio';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
-function stableViews(id: string): number {
+function stableViews(id?: string): number {
+  if (!id) return 128;
+  const str = String(id);
   let hash = 0;
-  for (let i = 0; i < id.length; i++) { hash = ((hash << 5) - hash) + id.charCodeAt(i); hash |= 0; }
+  for (let i = 0; i < str.length; i++) { hash = ((hash << 5) - hash) + str.charCodeAt(i); hash |= 0; }
   return Math.abs(hash) % 5000 + 50;
 }
 
@@ -1245,7 +1247,9 @@ export default function TwitLife() {
                     <p className="text-[#71767B] text-sm mt-1">Autonomous activity will begin shortly.</p>
                   </div>
                 ) : (
-                  events.filter(p => !p.reply_to_id || feedTab === 'following').map((post: any) => <PostCard key={post.id} post={post} />)
+                  events.filter(p => p && (!p.reply_to_id || feedTab === 'following')).map((post: any, idx: number) => (
+                    <PostCard key={post.id || `event_${idx}_${post.timestamp || Date.now()}`} post={post} />
+                  ))
                 )}
               </div>
             </div>
@@ -1259,8 +1263,8 @@ export default function TwitLife() {
               {notifications.length === 0 ? (
                 <div className="p-12 text-center"><Bell className="w-10 h-10 mx-auto mb-3 text-[#2F3336]" /><p className="text-xl font-bold text-[#E7E9EA] mb-1">Nothing to see here — yet</p><p className="text-[15px] text-[#71767B]">Likes, reposts, and mentions will show up here.</p></div>
               ) : (
-                notifications.map((n: any) => (
-                  <div key={n.id} className="tweet-hover flex items-start gap-3 px-4 py-3 border-b border-[#2F3336]">
+                notifications.map((n: any, idx: number) => (
+                  <div key={n.id || `notif_${idx}_${n.actor_name || idx}`} className="tweet-hover flex items-start gap-3 px-4 py-3 border-b border-[#2F3336]">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${n.type === 'like' ? 'text-[#F91880]' : n.type === 'retweet' ? 'text-[#00BA7C]' : 'text-[#1D9BF0]'}`}>
                       {n.type === 'like' ? <Heart className="w-5 h-5 fill-current" /> : n.type === 'retweet' ? <Repeat2 className="w-5 h-5" /> : <MessageCircle className="w-5 h-5" />}
                     </div>
@@ -1282,8 +1286,8 @@ export default function TwitLife() {
               {messages.length === 0 ? (
                 <div className="p-12 text-center"><Mail className="w-10 h-10 mx-auto mb-3 text-[#2F3336]" /><p className="text-xl font-bold text-[#E7E9EA] mb-1">Welcome to your inbox</p><p className="text-[15px] text-[#71767B]">DMs appear when NPCs have extreme vibe friction with you.</p></div>
               ) : (
-                messages.map((dm: any) => (
-                  <div key={dm.id} className={`tweet-hover px-4 py-3 border-b border-[#2F3336] ${dm.is_hate ? 'border-l-2 border-l-[#F4212E]' : ''}`}>
+                messages.map((dm: any, idx: number) => (
+                  <div key={dm.id || `msg_${idx}_${dm.from_handle || idx}`} className={`tweet-hover px-4 py-3 border-b border-[#2F3336] ${dm.is_hate ? 'border-l-2 border-l-[#F4212E]' : ''}`}>
                     <div className="flex items-center gap-2 mb-2">
                       <Avatar src={dm.from_profile_image_url} handle={dm.from_handle} size="w-8 h-8" />
                       <span className="font-bold text-[15px]">@{dm.from_handle}</span>
@@ -1318,7 +1322,7 @@ export default function TwitLife() {
               ) : (
                 <div>
                   <div className="px-4 py-3 border-b border-[#2F3336] bg-[#16181C]/50"><h2 className="font-bold text-[17px]">{selectedHood}</h2><p className="text-[15px] text-[#71767B]">{hoodDesc}</p></div>
-                  {loading ? <><SkeletonPost /><SkeletonPost /></> : neighborhoodFeed.length === 0 ? <div className="p-12 text-center text-[#71767B] text-[15px]">No posts in this neighborhood yet.</div> : neighborhoodFeed.map((p: any) => <PostCard key={p.id} post={p} />)}
+                  {loading ? <><SkeletonPost /><SkeletonPost /></> : neighborhoodFeed.length === 0 ? <div className="p-12 text-center text-[#71767B] text-[15px]">No posts in this neighborhood yet.</div> : neighborhoodFeed.map((p: any, idx: number) => <PostCard key={p.id || `hood_${idx}`} post={p} />)}
                 </div>
               )}
             </div>
