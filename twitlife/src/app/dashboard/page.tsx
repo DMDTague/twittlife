@@ -28,15 +28,15 @@ type Identity = { handle: string; name: string; desc: string; profile_image_url?
 
 export default function TwitLife() {
   const router = useRouter();
-  const { character, deplatform, updateCharacter, createCharacter } = useGameState();
+  const { character, loading: isStateLoading, deplatform, updateCharacter, createCharacter } = useGameState();
   const { postWhoosh, statDing, glitch, chaChing } = useAudio();
 
-  // If no character, send back to title screen
+  // If no character and loading is complete, send back to title screen
   useEffect(() => {
-    if (!character) {
-      router.push('/');
+    if (!isStateLoading && !character) {
+      router.replace('/');
     }
-  }, [character, router]);
+  }, [character, isStateLoading, router]);
 
   // Check for deplatforming trigger
   useEffect(() => {

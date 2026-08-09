@@ -53,16 +53,29 @@ export default function TitleScreen() {
   const [handle, setHandle] = useState("");
   const [selectedNiche, setSelectedNiche] = useState<string | null>(null);
   
-  // Avatar Builder State
-  const [gender, setGender] = useState("male");
-  const [hairColor, setHairColor] = useState("black");
-  const [eyeColor, setEyeColor] = useState("brown");
-  const [hairstyle, setHairstyle] = useState("short");
-  const [skinTone, setSkinTone] = useState("light");
+  // Vector Avatar Creator State
+  const [avatarStyle, setAvatarStyle] = useState<"personas" | "avataaars" | "open-peeps" | "pixel-art" | "bottts">("personas");
+  const [avatarSeed, setAvatarSeed] = useState(() => Math.random().toString(36).substring(2, 9));
+  const [avatarBg, setAvatarBg] = useState("b6e3f4");
+  const [customAvatarUrl, setCustomAvatarUrl] = useState("");
+  const [useCustomUrl, setUseCustomUrl] = useState(false);
 
-  const generatedAvatarUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(
-    `A vibrant 2D cartoon avatar portrait of a ${gender} with ${skinTone} skin, ${hairColor} ${hairstyle} hair and ${eyeColor} eyes, flat vector art style, clean lines, vibrant colors, solid white background`
-  )}?width=256&height=256&nologo=true`;
+  const generatedAvatarUrl = useCustomUrl && customAvatarUrl.trim()
+    ? customAvatarUrl.trim()
+    : `https://api.dicebear.com/9.x/${avatarStyle}/svg?seed=${encodeURIComponent(avatarSeed || handle || "twitlife")}&backgroundColor=${avatarBg}`;
+
+  const handleRandomizeAvatar = () => {
+    const styles: Array<"personas" | "avataaars" | "open-peeps" | "pixel-art" | "bottts"> = [
+      "personas", "avataaars", "open-peeps", "pixel-art", "bottts"
+    ];
+    const bgs = ["b6e3f4", "c0aede", "d1d4f9", "ffd5dc", "ffdfbf", "1da1f2", "7952b3", "2ea44f", "000000"];
+    
+    setAvatarStyle(styles[Math.floor(Math.random() * styles.length)]);
+    setAvatarSeed(Math.random().toString(36).substring(2, 10));
+    setAvatarBg(bgs[Math.floor(Math.random() * bgs.length)]);
+    setUseCustomUrl(false);
+    statDing();
+  };
 
   const [stats, setStats] = useState({
     aura: rollStat(),
@@ -76,7 +89,7 @@ export default function TitleScreen() {
   // Redirect if character already exists
   useEffect(() => {
     if (!loading && character) {
-      router.push("/dashboard");
+      router.replace("/dashboard");
     }
   }, [character, loading, router]);
 
@@ -253,92 +266,144 @@ export default function TitleScreen() {
             </div>
           </div>
 
-          {/* Avatar Builder */}
+          {/* Avatar Creator */}
           <div>
-            <label className="block text-cyan-300 font-mono mb-3 text-lg">
-              ▶ PHYSICAL ATTRIBUTES:
-            </label>
-            <div className="flex flex-col md:flex-row gap-6 bg-cyan-400/5 border border-cyan-400 p-4">
-              {/* Avatar Preview */}
-              <div className="w-32 h-32 flex-shrink-0 border-2 border-cyan-400 overflow-hidden bg-black mx-auto md:mx-0">
-                <img
-                  src={generatedAvatarUrl}
-                  alt="Avatar Preview"
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-              </div>
-              
-              {/* Trait Selectors */}
-              <div className="flex-1 grid grid-cols-2 gap-3 text-sm font-mono">
-                <div>
-                  <label className="block text-cyan-500 mb-1 text-xs">GENDER</label>
-                  <select
-                    value={gender}
-                    onChange={(e) => setGender(e.target.value)}
-                    className="w-full bg-black border border-cyan-400 text-cyan-300 p-2 focus:outline-none focus:ring-1 focus:ring-cyan-300"
-                  >
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="non-binary person">Non-Binary</option>
-                  </select>
+            <div className="flex justify-between items-center mb-3">
+              <label className="block text-cyan-300 font-mono text-lg">
+                ▶ CHARACTER PORTRAIT & STYLE:
+              </label>
+              <button
+                type="button"
+                onClick={handleRandomizeAvatar}
+                className="text-xs font-mono border border-cyan-400 bg-cyan-400/20 text-cyan-300 hover:bg-cyan-400 hover:text-black px-3 py-1.5 rounded transition-all flex items-center gap-1.5"
+              >
+                <Dices className="w-3.5 h-3.5" /> RANDOMIZE AVATAR
+              </button>
+            </div>
+
+            <div className="bg-cyan-400/5 border border-cyan-400 p-5 space-y-4 font-mono">
+              <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+                {/* Live Avatar Frame */}
+                <div className="relative group flex-shrink-0">
+                  <div className="w-36 h-36 border-4 border-cyan-400 bg-black rounded-2xl overflow-hidden shadow-cyan-400/20 shadow-xl flex items-center justify-center relative">
+                    <img
+                      src={generatedAvatarUrl}
+                      alt="Avatar Preview"
+                      className="w-full h-full object-cover transition-all duration-300 transform group-hover:scale-105"
+                      onError={(e) => {
+                        // Fallback if custom URL fails to load
+                        (e.target as HTMLImageElement).src = `https://api.dicebear.com/9.x/personas/svg?seed=${handle || "twitlife"}`;
+                      }}
+                    />
+                  </div>
+                  <div className="absolute -bottom-2 -right-2 bg-cyan-400 text-black text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
+                    {useCustomUrl ? "URL" : avatarStyle}
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-cyan-500 mb-1 text-xs">SKIN TONE</label>
-                  <select
-                    value={skinTone}
-                    onChange={(e) => setSkinTone(e.target.value)}
-                    className="w-full bg-black border border-cyan-400 text-cyan-300 p-2 focus:outline-none focus:ring-1 focus:ring-cyan-300"
-                  >
-                    <option value="pale">Pale</option>
-                    <option value="light">Light</option>
-                    <option value="medium">Medium</option>
-                    <option value="olive">Olive</option>
-                    <option value="brown">Brown</option>
-                    <option value="dark">Dark</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-cyan-500 mb-1 text-xs">HAIRSTYLE</label>
-                  <select
-                    value={hairstyle}
-                    onChange={(e) => setHairstyle(e.target.value)}
-                    className="w-full bg-black border border-cyan-400 text-cyan-300 p-2 focus:outline-none focus:ring-1 focus:ring-cyan-300"
-                  >
-                    <option value="short">Short</option>
-                    <option value="long">Long</option>
-                    <option value="curly">Curly</option>
-                    <option value="messy">Messy</option>
-                    <option value="bald">Bald</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-cyan-500 mb-1 text-xs">HAIR COLOR</label>
-                  <select
-                    value={hairColor}
-                    onChange={(e) => setHairColor(e.target.value)}
-                    className="w-full bg-black border border-cyan-400 text-cyan-300 p-2 focus:outline-none focus:ring-1 focus:ring-cyan-300"
-                  >
-                    <option value="black">Black</option>
-                    <option value="brown">Brown</option>
-                    <option value="blonde">Blonde</option>
-                    <option value="red">Red</option>
-                    <option value="blue">Blue</option>
-                    <option value="pink">Pink</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-cyan-500 mb-1 text-xs">EYE COLOR</label>
-                  <select
-                    value={eyeColor}
-                    onChange={(e) => setEyeColor(e.target.value)}
-                    className="w-full bg-black border border-cyan-400 text-cyan-300 p-2 focus:outline-none focus:ring-1 focus:ring-cyan-300"
-                  >
-                    <option value="brown">Brown</option>
-                    <option value="blue">Blue</option>
-                    <option value="green">Green</option>
-                    <option value="hazel">Hazel</option>
-                  </select>
+
+                {/* Controls */}
+                <div className="flex-1 w-full space-y-4 text-xs">
+                  {/* Style Archetype Selector */}
+                  <div>
+                    <label className="block text-cyan-500 mb-1.5 font-bold uppercase tracking-wider text-[11px]">
+                      ART STYLE ARCHETYPE
+                    </label>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {[
+                        { id: "personas", label: "Sleek", icon: "👤" },
+                        { id: "avataaars", label: "BitLife", icon: "🧍" },
+                        { id: "pixel-art", label: "Pixel", icon: "👾" },
+                        { id: "open-peeps", label: "Peeps", icon: "🎨" },
+                        { id: "bottts", label: "Bot", icon: "🤖" },
+                      ].map((style) => (
+                        <button
+                          key={style.id}
+                          type="button"
+                          onClick={() => {
+                            setAvatarStyle(style.id as any);
+                            setUseCustomUrl(false);
+                            statDing();
+                          }}
+                          className={`p-2 border text-center transition-all ${
+                            !useCustomUrl && avatarStyle === style.id
+                              ? "border-cyan-400 bg-cyan-400 text-black font-bold"
+                              : "border-cyan-400/40 bg-black text-cyan-300 hover:border-cyan-400"
+                          }`}
+                        >
+                          <div className="text-base">{style.icon}</div>
+                          <div className="text-[10px] truncate">{style.label}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Seed / Feature Customizer */}
+                  {!useCustomUrl && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-cyan-500 mb-1 font-bold text-[11px]">
+                          DNA SEED (FACTION / LOOK)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={avatarSeed}
+                            onChange={(e) => setAvatarSeed(e.target.value)}
+                            placeholder="Type any word..."
+                            className="w-full bg-black border border-cyan-400/60 p-2 text-cyan-300 focus:outline-none focus:border-cyan-400 text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-cyan-500 mb-1 font-bold text-[11px]">
+                          BACKGROUND AURA
+                        </label>
+                        <div className="flex gap-1.5 items-center flex-wrap pt-0.5">
+                          {[
+                            { hex: "b6e3f4", label: "Sky" },
+                            { hex: "c0aede", label: "Purple" },
+                            { hex: "ffd5dc", label: "Pink" },
+                            { hex: "1da1f2", label: "Twitter" },
+                            { hex: "7952b3", label: "Royal" },
+                            { hex: "2ea44f", label: "Emerald" },
+                            { hex: "000000", label: "Dark" },
+                          ].map((bg) => (
+                            <button
+                              key={bg.hex}
+                              type="button"
+                              onClick={() => setAvatarBg(bg.hex)}
+                              className={`w-6 h-6 rounded-full border-2 transition-transform ${
+                                avatarBg === bg.hex ? "border-white scale-110 shadow" : "border-transparent hover:scale-105"
+                              }`}
+                              style={{ backgroundColor: `#${bg.hex}` }}
+                              title={bg.label}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Custom URL Input Toggle */}
+                  <div className="pt-1 border-t border-cyan-400/20">
+                    <button
+                      type="button"
+                      onClick={() => setUseCustomUrl(!useCustomUrl)}
+                      className="text-[11px] text-cyan-400 underline hover:text-cyan-300 flex items-center gap-1"
+                    >
+                      {useCustomUrl ? "◄ Return to Vector Creator" : "► Paste Custom Image URL / PFP Link"}
+                    </button>
+                    {useCustomUrl && (
+                      <input
+                        type="url"
+                        value={customAvatarUrl}
+                        onChange={(e) => setCustomAvatarUrl(e.target.value)}
+                        placeholder="https://example.com/my-avatar.png"
+                        className="w-full mt-2 bg-black border border-cyan-400 p-2 text-cyan-300 text-xs focus:outline-none"
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
