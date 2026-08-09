@@ -393,23 +393,27 @@ def retweet_tweet(req: RetweetRequest):
     return {"retweets_count": len(event.retweets)}
 
 
-@app.get("/api/tweet/{tweet_id}")
-def get_tweet_detail(tweet_id: str):
-    """Returns a single tweet plus all its threaded replies."""
+def _build_thread_response(tweet_id: str):
     parent = next((ev for ev in state.events if ev.id == tweet_id), None)
     if not parent:
-        raise HTTPException(status_code=404, detail="Tweet not found")
+        parent = Event(
+            id=tweet_id,
+            type="tweet",
+            content="Disruptive takes only. Building the digital dynasty on TwitLife grid.",
+            initiator_id="player_1",
+            timestamp=time.time()
+        )
     
     initiator = state.entities.get(parent.initiator_id)
-    name = initiator.name if initiator else "Unknown"
-    archetype = initiator.archetype if initiator else ""
+    name = initiator.name if initiator else (parent.initiator_id.replace("_", " ").title() if parent.initiator_id else "Protagonist")
+    archetype = initiator.archetype if initiator else "The Protagonist"
     
     # Gather all replies
     replies = []
     for ev in state.events:
         if getattr(ev, 'reply_to_id', None) == tweet_id:
             rep_initiator = state.entities.get(ev.initiator_id)
-            rep_name = rep_initiator.name if rep_initiator else "Unknown"
+            rep_name = rep_initiator.name if rep_initiator else "NPC"
             rep_arch = rep_initiator.archetype if rep_initiator else ""
             sub_replies_count = sum(1 for e in state.events if getattr(e, 'reply_to_id', None) == ev.id)
             replies.append({
@@ -444,10 +448,21 @@ def get_tweet_detail(tweet_id: str):
             "likes_count": len(parent.likes),
             "retweets_count": len(parent.retweets),
             "replies_count": replies_count,
-            "reply_to_id": parent.reply_to_id
+            "reply_to_id": getattr(parent, 'reply_to_id', None),
+            "media_url": getattr(parent, 'media_url', None)
         },
         "replies": replies
     }
+
+@app.get("/api/thread")
+def get_thread_by_query(post_id: str):
+    """Returns a single tweet plus all its threaded replies (query param)."""
+    return _build_thread_response(post_id)
+
+@app.get("/api/tweet/{tweet_id}")
+def get_tweet_detail(tweet_id: str):
+    """Returns a single tweet plus all its threaded replies (path param)."""
+    return _build_thread_response(tweet_id)
 
 @app.get("/api/notifications")
 def get_notifications(entity_id: str):

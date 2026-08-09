@@ -59,18 +59,22 @@ export default function TweetDetail() {
 
     const fetchTweet = async () => {
         try {
-            const res = await fetch(`${API}/api/thread?post_id=${tweetId}`, {
+            let res = await fetch(`${API}/api/thread?post_id=${tweetId}`, {
                 cache: 'no-store',
                 headers: {
                     'Cache-Control': 'no-cache, no-store, must-revalidate',
                     'Pragma': 'no-cache'
                 }
             });
-            if (!res.ok) throw new Error("Not found");
-            const data = await res.json();
-            setTweet(data.tweet);
-            setReplies(data.replies || []);
-        } catch { console.error("Failed to fetch tweet"); }
+            if (!res.ok) {
+                res = await fetch(`${API}/api/tweet/${tweetId}`, { cache: 'no-store' });
+            }
+            if (res.ok) {
+                const data = await res.json();
+                if (data.tweet) setTweet(data.tweet);
+                if (data.replies) setReplies(data.replies);
+            }
+        } catch {}
         setLoading(false);
     };
 
