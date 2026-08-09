@@ -299,8 +299,21 @@ def seed_population(num_swarm: int = 800) -> List[Entity]:
         "GradHospGrace", "PassyunkPat", "TempleTyler", "DrexelDana", "PennLandingPete",
         "BoathouseBlake", "ReadingTerminalRay", "ElFuryStan", "BirdsNation267", "ProccessTrust",
     ]
+    first_names = [
+        "Danny", "Chloe", "Kevin", "Marcus", "Rachel", "Tony", "Sarah", "Alex", 
+        "Fiona", "Sam", "Tyler", "Dave", "Nina", "Nick", "Sal", "Maya", "Chris", 
+        "Jordan", "Taylor", "Ray", "Ollie", "Wes", "Grace", "Pat", "Dana", "Pete",
+        "Blake", "Gabe", "Hannah", "Leo", "Zoe", "Brandon", "Jessica", "Matt", "Nate",
+        "Dylan", "Sean", "Justin", "Megan", "Emily", "Jack", "Ryan", "Cody", "Kyle"
+    ]
+    descriptors = [
+        "Philly", "Delco", "Wawa", "SEPTA", "BroadSt", "Fishtown", "Rittenhouse",
+        "NoLibs", "Kensington", "OldCity", "WestPhilly", "Passyunk", "Temple", "Drexel",
+        "Birds", "Sixers", "Crypto", "VC", "Tech", "Doomer", "Jawn", "MainLine", "SouthPhilly"
+    ]
+
     for i in range(num_swarm):
-        bot_id = f"bot_{uuid.uuid4().hex[:6]}"
+        bot_id = f"user_{uuid.uuid4().hex[:6]}"
         archetype = random.choice(SWARM_ARCHETYPES)
         
         base_truth = generate_noise_baseline()
@@ -315,7 +328,20 @@ def seed_population(num_swarm: int = 800) -> List[Entity]:
             base_truth["social_justice"] = random.randint(40, 85)
             base_truth["climate_emergency"] = random.randint(30, 70)
         
-        name = local_names[i] if i < len(local_names) else f"User{random.randint(1000,99999)}"
+        if i < len(local_names):
+            name = local_names[i]
+        else:
+            fname = first_names[i % len(first_names)]
+            desc = descriptors[(i * 7) % len(descriptors)]
+            num = random.randint(10, 99)
+            formats = [
+                f"{desc}{fname}{num}",
+                f"{fname}_{desc}",
+                f"{fname}From{desc}",
+                f"{desc}_{fname}",
+                f"{fname}In{desc}"
+            ]
+            name = formats[i % len(formats)]
         
         bot_followers_count = random.randint(200, 8000)
         bot = Entity(

@@ -85,6 +85,8 @@ def _call_openrouter_with_retries(client, model, messages, max_tokens=200, tempe
             print(f"[ENGINE] LLM rate-limited after {attempt} attempts. Raising last exception.")
             raise
 
+RECENT_PROCEDURAL_REPLIES = set()
+
 def generate_procedural_fallback(messages):
     prompt_text = ""
     if messages:
@@ -94,45 +96,130 @@ def generate_procedural_fallback(messages):
     
     prompt_lower = prompt_text.lower()
     
-    if "shitposter" in prompt_lower:
+    # 1. Casual / Greetings ("sup", "yo", "hey", "hi", "what's up", "gm", "good morning")
+    if any(w in prompt_lower for w in ["sup", "yo", "whats up", "what's up", "hey", "hi ", "gm ", "good morning"]):
+        options = [
+            "chilling at Wawa grabbing an iced coffee, you?",
+            "man I'm tired fr fr",
+            "just watching the Birds highlights on loop honestly 🦅",
+            "trying to figure out why SEPTA is delayed again 😭",
+            "staring at my screen pretending I'm working lmao",
+            "not much! just posting through the pain as usual",
+            "working from a coffee shop & spending $8 on an oat milk latte ☕",
+            "vibing! what's the move in the city today?",
+            "just posted a 10-tweet thread no one asked for 🚀",
+            "chilling! how's your day going so far?",
+            "trying to decide what to order for dinner 🍕",
+            "staring at crypto charts and questioning life decisions 💀",
+            "yo! what's good on the timeline today?",
+            "just finished a workout, feeling unstoppable 💪",
+            "waiting on delivery that's 45 mins late 😭",
+            "big day today, let's see how it goes",
+            "nothing much, just observing the chaos on this grid",
+        ]
+    # 2. Questions ("why", "how", "what", "where", "who", "when", "?")
+    elif "?" in prompt_lower or any(w in prompt_lower for w in ["why", "how", "what", "where", "who", "when"]):
+        options = [
+            "asking the real questions here 🗣️",
+            "nobody knows but it's provocative!",
+            "simplest answer: skill issue 💀",
+            "because Philly is built different fr",
+            "don't ask questions you aren't ready for the answer to lol",
+            "big if true, huge if false",
+            "because the algorithm demands sacrifice 🔄",
+            "unpopular opinion: nobody actually knows",
+            "asking for a friend or yourself? 🤔",
+            "we'll find out on the next episode of this timeline",
+            "hard to say, but I'm placing my bets now 🎯",
+            "the math ain't mathing on this one chief",
+        ]
+    # 3. Sports & Philly Culture ("birds", "eagles", "sixers", "phillies", "wawa", "septa", "jawn")
+    elif any(w in prompt_lower for w in ["birds", "eagles", "sixers", "phillies", "wawa", "septa", "jawn"]):
+        options = [
+            "GO BIRDS 🦅🦅🦅",
+            "Wawa hoagie hits different at 2am no cap",
+            "SEPTA delayed again, water is wet 😭",
+            "Trust the Process 🔔",
+            "Broad Street is gonna be chaotic tonight",
+            "real ones know Jim's over Pat's or Geno's any day",
+            "that jawn is iconic fr",
+            "Schuylkill traffic is testing my patience today",
+            "pretzels and Wawa iced tea is peak nutrition",
+        ]
+    # 4. Tech / Crypto / Startup / VC
+    elif any(w in prompt_lower for w in ["tech", "crypto", "ai", "b2b", "saas", "startup", "vc", "founder", "build"]):
+        options = [
+            "drop the tech stack immediately 💻",
+            "building in public is a lifestyle not a job 🚀",
+            "VCs sliding into DMs as we speak",
+            "leveraging synergy to disrupt traditional models",
+            "bro thinks he's Steve Jobs 💀",
+            "ship fast, break things, post about it on Twitter",
+            "is this B2B SaaS or just vibes?",
+            "adding this to my pitch deck slide #4",
+        ]
+    # 5. Archetype Specific (Shitposter, Thought Leader, Debate Bro, Wholesome)
+    elif "shitposter" in prompt_lower:
         options = [
             "bro really thought he cooked with this one 💀",
             "massive L + ratio + touch grass + skill issue",
             "sending this straight to the group chat lmao",
             "nah this timeline is cooked fr fr 😭",
-            "big if true, huge if false"
+            "babe wake up new unhinged tweet dropped",
+            "deleting my account after reading this fr",
+            "this tweet just aged me 10 years",
         ]
     elif "thought leader" in prompt_lower:
         options = [
             "Important takeaway here: consistency in positioning creates maximum leverage.",
             "This highlights a fundamental shift in user behavior we cannot afford to ignore.",
             "Unpopular opinion: this is actually a brilliant strategic maneuver.",
-            "Building in public requires facing uncomfortable truths like this."
+            "Building in public requires facing uncomfortable truths like this.",
+            "Here's what 99% of people get wrong about this 🧵👇",
         ]
     elif "debate bro" in prompt_lower or "hostility" in prompt_lower or "angry" in prompt_lower:
         options = [
             "Imagine actually believing this in 2026. Absolute nonsense.",
             "Ratio incoming. Delete this before it gets worse.",
             "Source: trust me bro. Classic bad faith take.",
-            "You really typed this out and hit post. Incredible."
+            "You really typed this out and hit post. Incredible.",
+            "Zero research, maximum confidence. Classic timeline behavior.",
         ]
     elif "wholesome" in prompt_lower:
         options = [
             "Honestly love seeing this energy! Keep going! ✨",
             "So true! Couldn't agree more with this take 🙌",
             "This made my day, absolutely iconic post 🔥",
-            "Sending positive vibes to the timeline ❤️"
+            "Sending positive vibes to the timeline ❤️",
+            "Rooting for you from afar! 🌟",
         ]
     else:
         options = [
-            "valid point tbh, let's see how this plays out",
-            "philly timeline never fails to amaze me 🏙️",
-            "wait is this actually real or a bit?",
-            "big moves being made today on the grid",
-            "posting this from the Wawa parking lot"
+            "valid point tbh, let me grab some coffee and think about it ☕",
+            "this timeline is unmatched today lmao",
+            "hard agree with this take fr",
+            "saving this for later when it inevitably goes viral",
+            "classic Philly internet energy right here",
+            "couldn't have said it better myself 🙌",
+            "posting through it like a champion",
+            "this is why I check this app 100 times a day",
+            "say it louder for the people in the back 🗣️",
         ]
     
-    tweet = random.choice(options)
+    # Filter out recently used options to prevent duplicate replies in the same session
+    available = [opt for opt in options if opt not in RECENT_PROCEDURAL_REPLIES]
+    if not available:
+        available = options
+        RECENT_PROCEDURAL_REPLIES.clear()
+        
+    tweet = random.choice(available)
+    RECENT_PROCEDURAL_REPLIES.add(tweet)
+    if len(RECENT_PROCEDURAL_REPLIES) > 40:
+        try:
+            RECENT_PROCEDURAL_REPLIES.pop()
+        except KeyError:
+            pass
+
     impact = random.randint(-5, 10)
     fallback_content = json.dumps({"tweet": tweet, "impact_score": impact})
     return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=fallback_content))], usage=SimpleNamespace(total_tokens=0))
