@@ -34,7 +34,7 @@ export default function ProfilePage() {
             <div className="max-w-2xl mx-auto px-6 -mt-16 bg-navy min-h-screen border-l border-r border-border-dark">
                 <div className="flex justify-between items-end">
                     <img
-                        src={user.profile_image_url || `https://source.boringavatars.com/beam/120/${user.handle}?colors=maroon,navy,gold`}
+                        src={user.profile_image_url || `https://api.dicebear.com/9.x/personas/svg?seed=${encodeURIComponent(user.handle || "twitlife")}&backgroundColor=b6e3f4`}
                         className="w-32 h-32 rounded-full border-4 border-navy bg-navy-light shadow-2xl"
                         alt="Profile Avatar"
                     />

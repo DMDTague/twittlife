@@ -842,10 +842,24 @@ def post_tweet(req: PostTweetRequest, background_tasks: BackgroundTasks):
     Process a new post and run the engine loop.
     NEW: Includes deplatforming checks, auto-replies, and tier progression.
     """
-    # Get player entity
-    player = state.entities.get(req.initiator_id)
+    # Get player entity (auto-create if handle not yet registered)
+    player_id = req.initiator_id if req.initiator_id else "player_1"
+    player = state.entities.get(player_id)
     if not player:
-        raise HTTPException(status_code=404, detail="Player not found")
+        clean_name = player_id.replace("@", "").replace("_", " ").title()
+        player = Entity(
+            id=player_id,
+            name=clean_name if clean_name else "Protagonist",
+            is_player=True,
+            archetype="The Protagonist",
+            primary_niche="tech",
+            trait_matrix=TraitMatrix(politics=0, tone=50, hostility=0),
+            internal_truth={},
+            public_vibe={},
+            follower_count=1500,
+            wealth=500
+        )
+        engine.add_entity(player)
     
     # PHASE 27: Check deplatforming condition before posting
     if engine.check_deplatform_condition(player):

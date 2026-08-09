@@ -373,18 +373,15 @@ export default function TwitLife() {
   const getAvatar = (handle: string, faction?: string, isCeleb?: boolean) => {
     // This is now mostly for fallback or onboarding, as the backend provides urls
     const seed = handle?.toLowerCase() || 'default';
-    if (seed.startsWith('user') || seed.startsWith('bot_')) {
-      const colors = {
-        "The Delco Troll": "5e0000",
-        "The Main Line Influencer": "ffd700",
-        "The Global Doomer": "000080",
-        "The Subversive Troll": "FF0000",
-        "The Heritage Influencer": "FFD700"
-      };
-      const bg = colors[faction as keyof typeof colors] || "b6e3f4";
-      return `https://api.dicebear.com/7.x/adventurer/svg?seed=${seed}&backgroundColor=${bg}`;
-    }
-    return `https://unavatar.io/twitter/${seed}`;
+    const colors = {
+      "The Delco Troll": "5e0000",
+      "The Main Line Influencer": "ffd700",
+      "The Global Doomer": "000080",
+      "The Subversive Troll": "FF0000",
+      "The Heritage Influencer": "FFD700"
+    };
+    const bg = colors[faction as keyof typeof colors] || "b6e3f4";
+    return `https://api.dicebear.com/9.x/personas/svg?seed=${encodeURIComponent(seed)}&backgroundColor=${bg}`;
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
