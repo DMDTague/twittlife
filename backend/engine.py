@@ -88,16 +88,24 @@ def _call_openrouter_with_retries(client, model, messages, max_tokens=200, tempe
 RECENT_PROCEDURAL_REPLIES = set()
 
 def generate_procedural_fallback(messages):
-    prompt_text = ""
+    system_text = ""
+    user_text = ""
+    
     if messages:
         for m in messages:
             if isinstance(m, dict):
-                prompt_text += m.get("content", "") + " "
+                role = m.get("role", "")
+                content = m.get("content", "")
+                if role == "system":
+                    system_text += content + " "
+                elif role == "user":
+                    user_text += content + " "
+
+    user_lower = user_text.lower()
+    system_lower = system_text.lower()
     
-    prompt_lower = prompt_text.lower()
-    
-    # 1. Casual / Greetings / Everyday Check-in ("sup", "yo", "hey", "hi", "how we doing", "how", "what's up", "gm")
-    if any(w in prompt_lower for w in ["sup", "yo", "whats up", "what's up", "hey", "hi ", "gm ", "good morning", "how we doing", "how's it going"]):
+    # 1. Check-in / Casual Greetings ("how we doing", "how's it going", "sup", "yo", "whats up", "what's up", "hey", "hi", "gm")
+    if any(w in user_lower for w in ["how we doing", "how's it going", "how are we", "sup", "yo", "whats up", "what's up", "hey", "hi ", "gm ", "good morning"]):
         options = [
             "waiting on delivery that's 45 mins late 😭",
             "staring at DoorDash watching my driver take a random 20 min detour 💀",
@@ -120,7 +128,7 @@ def generate_procedural_fallback(messages):
             "chilling! trying to figure out what to order for dinner 🍕",
         ]
     # 2. Questions ("why", "how", "what", "where", "who", "when", "?")
-    elif "?" in prompt_lower or any(w in prompt_lower for w in ["why", "how", "what", "where", "who", "when"]):
+    elif "?" in user_lower or any(w in user_lower for w in ["why", "how", "what", "where", "who", "when"]):
         options = [
             "asking the real questions here 🗣️",
             "nobody knows but it's provocative!",
@@ -134,7 +142,7 @@ def generate_procedural_fallback(messages):
             "because Philly is built different fr",
         ]
     # 3. Sports & Local Culture ("birds", "eagles", "sixers", "phillies", "wawa", "septa", "jawn")
-    elif any(w in prompt_lower for w in ["birds", "eagles", "sixers", "phillies", "wawa", "septa", "jawn"]):
+    elif any(w in user_lower for w in ["birds", "eagles", "sixers", "phillies", "wawa", "septa", "jawn"]):
         options = [
             "GO BIRDS 🦅🦅🦅",
             "Wawa hoagie hits different at 2am no cap",
@@ -145,7 +153,7 @@ def generate_procedural_fallback(messages):
             "pretzels and Wawa iced tea is peak nutrition",
         ]
     # 4. Tech / Crypto / Startup / VC
-    elif any(w in prompt_lower for w in ["tech", "crypto", "ai", "b2b", "saas", "startup", "vc", "founder", "build"]):
+    elif any(w in user_lower for w in ["tech", "crypto", "ai", "b2b", "saas", "startup", "vc", "founder", "build"]):
         options = [
             "drop the tech stack immediately 💻",
             "VCs sliding into DMs as we speak",
@@ -154,30 +162,15 @@ def generate_procedural_fallback(messages):
             "is this B2B SaaS or just vibes?",
             "adding this to my pitch deck slide #4",
         ]
-    # 5. Archetype Specific (Shitposter, Thought Leader, Debate Bro, Wholesome)
-    elif "shitposter" in prompt_lower:
-        options = [
-            "bro really thought he cooked with this one 💀",
-            "massive L + ratio + touch grass + skill issue",
-            "sending this straight to the group chat lmao",
-            "nah this timeline is cooked fr fr 😭",
-            "babe wake up new unhinged tweet dropped",
-            "deleting my account after reading this fr",
-        ]
-    elif "thought leader" in prompt_lower:
-        options = [
-            "Unpopular opinion: this is actually a brilliant maneuver.",
-            "Facing uncomfortable truths like this is necessary.",
-            "Here's what 99% of people get wrong about this 🧵👇",
-        ]
-    elif "debate bro" in prompt_lower or "hostility" in prompt_lower or "angry" in prompt_lower:
+    # 5. System Prompt Relationship Overrides (Haters vs Lovers)
+    elif "severely violates your core belief" in system_lower or "must attack them" in system_lower:
         options = [
             "Imagine actually believing this in 2026. Absolute nonsense.",
             "Ratio incoming. Delete this before it gets worse.",
             "Source: trust me bro. Classic bad faith take.",
             "Zero research, maximum confidence. Classic timeline behavior.",
         ]
-    elif "wholesome" in prompt_lower:
+    elif "aligns perfectly with your views" in system_lower or "wholesome" in system_lower:
         options = [
             "Honestly love seeing this energy! Keep going! ✨",
             "So true! Couldn't agree more with this take 🙌",
