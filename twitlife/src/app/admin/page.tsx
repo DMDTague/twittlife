@@ -17,6 +17,8 @@ type EntityInfo = {
     hostility: number;
 };
 
+const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
 export default function AdminPanel() {
     const [entities, setEntities] = useState<EntityInfo[]>([]);
     const [selectedEntity, setSelectedEntity] = useState<string | null>(null);
@@ -31,7 +33,7 @@ export default function AdminPanel() {
 
     const fetchEntities = async () => {
         try {
-            const res = await fetch("http://127.0.0.1:8000/api/admin/entities");
+            const res = await fetch(`${API}/api/admin/entities`);
             const data = await res.json();
             setEntities(data.entities || []);
             log(`Loaded ${data.total_count} entities.`);
@@ -46,7 +48,7 @@ export default function AdminPanel() {
 
     const forcePulse = async () => {
         try {
-            const res = await fetch("http://127.0.0.1:8000/api/admin/force_pulse", { method: "POST" });
+            const res = await fetch(`${API}/api/admin/force_pulse`, { method: "POST" });
             const data = await res.json();
             log(`PULSE FIRED: ${data.active_pulse?.topic || "Unknown"}`);
         } catch (e) {
@@ -57,7 +59,7 @@ export default function AdminPanel() {
     const injectScandal = async () => {
         if (!selectedEntity || !scandalText.trim()) return;
         try {
-            const res = await fetch("http://127.0.0.1:8000/api/admin/inject_scandal", {
+            const res = await fetch(`${API}/api/admin/inject_scandal`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ target_id: selectedEntity, scandal_text: scandalText }),
@@ -73,7 +75,7 @@ export default function AdminPanel() {
     const editTrait = async () => {
         if (!selectedEntity || !traitKey.trim()) return;
         try {
-            const res = await fetch("http://127.0.0.1:8000/api/admin/edit_traits", {
+            const res = await fetch(`${API}/api/admin/edit_traits`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ entity_id: selectedEntity, traits: { [traitKey]: traitValue } }),
@@ -91,7 +93,7 @@ export default function AdminPanel() {
 
     const exportState = async () => {
         try {
-            const res = await fetch("http://127.0.0.1:8000/api/admin/export_state");
+            const res = await fetch(`${API}/api/admin/export_state`);
             const data = await res.json();
             setExportData(data);
             log(`EXPORT: ${data.total_entities} entities, ${data.total_events} events.`);

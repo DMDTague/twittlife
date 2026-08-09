@@ -15,14 +15,19 @@ from dictionaries import get_all_dict_keys
 from fandom_math import FactionMath
 
 load_dotenv()
-try:
-    groq_client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=os.getenv("OPENROUTER_API_KEY"),
-    )
-except Exception as e:
-    groq_client = None
-    print(f"Failed to initialize OpenRouter client: {e}")
+openrouter_key = os.getenv("OPENROUTER_API_KEY")
+groq_client = None
+if openrouter_key:
+    try:
+        groq_client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=openrouter_key,
+        )
+    except Exception as e:
+        groq_client = None
+        print(f"Failed to initialize OpenRouter client: {e}")
+else:
+    print("[ENGINE] OPENROUTER_API_KEY not found. Running in hybrid procedural mode.")
 
 # Concurrency + env-driven LLM tuning
 LLM_CONCURRENCY = int(os.getenv("LLM_CONCURRENCY", "2"))
@@ -80,13 +85,66 @@ def _call_openrouter_with_retries(client, model, messages, max_tokens=200, tempe
             print(f"[ENGINE] LLM rate-limited after {attempt} attempts. Raising last exception.")
             raise
 
+def generate_procedural_fallback(messages):
+    prompt_text = ""
+    if messages:
+        for m in messages:
+            if isinstance(m, dict):
+                prompt_text += m.get("content", "") + " "
+    
+    prompt_lower = prompt_text.lower()
+    
+    if "shitposter" in prompt_lower:
+        options = [
+            "bro really thought he cooked with this one 💀",
+            "massive L + ratio + touch grass + skill issue",
+            "sending this straight to the group chat lmao",
+            "nah this timeline is cooked fr fr 😭",
+            "big if true, huge if false"
+        ]
+    elif "thought leader" in prompt_lower:
+        options = [
+            "Important takeaway here: consistency in positioning creates maximum leverage.",
+            "This highlights a fundamental shift in user behavior we cannot afford to ignore.",
+            "Unpopular opinion: this is actually a brilliant strategic maneuver.",
+            "Building in public requires facing uncomfortable truths like this."
+        ]
+    elif "debate bro" in prompt_lower or "hostility" in prompt_lower or "angry" in prompt_lower:
+        options = [
+            "Imagine actually believing this in 2026. Absolute nonsense.",
+            "Ratio incoming. Delete this before it gets worse.",
+            "Source: trust me bro. Classic bad faith take.",
+            "You really typed this out and hit post. Incredible."
+        ]
+    elif "wholesome" in prompt_lower:
+        options = [
+            "Honestly love seeing this energy! Keep going! ✨",
+            "So true! Couldn't agree more with this take 🙌",
+            "This made my day, absolutely iconic post 🔥",
+            "Sending positive vibes to the timeline ❤️"
+        ]
+    else:
+        options = [
+            "valid point tbh, let's see how this plays out",
+            "philly timeline never fails to amaze me 🏙️",
+            "wait is this actually real or a bit?",
+            "big moves being made today on the grid",
+            "posting this from the Wawa parking lot"
+        ]
+    
+    tweet = random.choice(options)
+    impact = random.randint(-5, 10)
+    fallback_content = json.dumps({"tweet": tweet, "impact_score": impact})
+    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=fallback_content))], usage=SimpleNamespace(total_tokens=0))
+
 def call_openrouter_safe(client, model, messages, max_tokens=200, temperature=0.8, response_format=None, extra_headers=None, max_retries=4, backoff_base=0.5):
+    if client is None:
+        return generate_procedural_fallback(messages)
     try:
         return _call_openrouter_with_retries(client, model, messages, max_tokens, temperature, response_format, extra_headers, max_retries, backoff_base)
     except Exception as e:
-        print(f"[ENGINE] LLM API Call failed after retries: {e}")
-        fallback_content = json.dumps({"tweet": "The AI is temporarily unavailable. NPC did not generate a reply.", "impact_score": 0})
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=fallback_content))], usage=SimpleNamespace(total_tokens=0))
+        print(f"[ENGINE] LLM API Call failed after retries: {e}. Using procedural fallback.")
+        return generate_procedural_fallback(messages)
 
 
 class GameEngine:
@@ -1165,14 +1223,16 @@ Tweet: "{tweet_text}"
         visible_events = self.filter_events_for_entity(entity_id, self.state.events)
         
         # Build recent timeline context (compact)
-        recent_public = []
+        recent_timeline = []
         for ev in visible_events[-8:]:
-            if ev.visibility == 'Public':
-                init = self.state.entities.get(ev.initiator_id)
-                iname = init.name if init else ev.initiator_id
-                recent_public.append(f"@{iname}: {ev.content[:100]}")
+            init = self.state.entities.get(ev.initiator_id)
+            iname = init.name if init else ev.initiator_id
+            if ev.visibility == 'Private' or ev.type == 'dm':
+                recent_timeline.append(f"[DIRECT MESSAGE] @{iname}: {ev.content[:100]}")
+            else:
+                recent_timeline.append(f"@{iname}: {ev.content[:100]}")
         
-        timeline_str = "\n".join(recent_public) if recent_public else "Timeline is quiet right now."
+        timeline_str = "\n".join(recent_timeline) if recent_timeline else "Timeline is quiet right now."
         
         # Determine personality style based on traits
         tm = entity.trait_matrix

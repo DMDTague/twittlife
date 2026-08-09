@@ -1,21 +1,28 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 
 interface TopicData {
     trait: string;
     value: number;
 }
 
-export default function ProfilePage({ params }: { params: { id: string } }) {
+const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
+export default function ProfilePage() {
+    const params = useParams();
+    const id = params?.id as string;
     const [user, setUser] = useState<any>(null);
 
     useEffect(() => {
-        fetch(`http://127.0.0.1:8000/api/profile/${params.id}`)
+        if (!id) return;
+        fetch(`${API}/api/profile/${id}`)
             .then(res => res.json())
             .then(data => setUser(data))
             .catch(e => console.error(e));
-    }, [params.id]);
+    }, [id]);
+
 
     if (!user) return <div className="min-h-screen bg-navy flex items-center justify-center text-text-muted">Loading God Mode Data...</div>;
 
