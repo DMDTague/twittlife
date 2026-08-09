@@ -7,7 +7,7 @@ import { useGameState } from '@/hooks/useGameState';
 import { useAudio } from '@/hooks/useAudio';
 
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'https://twitlife-production.up.railway.app';
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 function stableViews(id: string): number {
   let hash = 0;
