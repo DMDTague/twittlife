@@ -1357,7 +1357,6 @@ CRITICAL RULES:
         """
         Generates an unhinged, targeted Private message based on extreme Vibe friction.
         """
-        if not groq_client: return None
         npc = self.state.entities.get(npc_id)
         if not npc: return None
         initiator = self.state.entities.get(trigger_event.initiator_id)
@@ -1368,44 +1367,40 @@ CRITICAL RULES:
         dm_directive = "HATE/HARASSMENT" if is_hate else "OBSESSIVE PRAISE/PARASOCIAL"
         
         dm_prompt_extension = f'''
-CRITICAL INSTRUCTION: You are now sending a PRIVATE DIRECT MESSAGE to {initiator_name}. 
-Unlike a public tweet, you can be more intimate, aggressive, or obsessive. No one else will see this.
-Your objective is: {dm_directive}.
-If you are 'Hating', use personal attacks based on their recent post ('{trigger_event.content}'). 
-If you are 'Praising', act like an intense parasocial superfan who agrees with them perfectly.
-You MUST output a valid JSON object matching this schema exactly:
-{{
-  "dm_text": "The raw text of your unhinged DM.",
-  "impact_score": <integer from -20 to 20 evaluating how much this affects the player's psychology/aura>
-}}
+        You are sending a DIRECT PRIVATE MESSAGE (DM) to @{initiator_name}.
+        This is PRIVATE — nobody else will see this message except {initiator_name}.
+
+        CONTEXT: {initiator_name}'s recent post triggered an extreme reaction from you (Friction Score: {friction_score:.1f}/200).
+        DIRECTIVE: Write a {dm_directive} direct message.
         '''
+
         try:
-            print(f"[ENGINE] Generating DM Warfare from {npc.name} to {initiator_name} (Hate={is_hate})...")
+            print(f"[ENGINE] Generating DM from {npc.name} to {initiator_name}...")
             response = call_openrouter_safe(groq_client,
                 model="google/gemma-3-27b-it:free",
                 messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Slide into {initiator_name}'s DMs regarding their post: '{trigger_event.content}'"}
+                    {"role": "system", "content": system_prompt + "\n" + dm_prompt_extension},
+                    {"role": "user", "content": f"Write your DM to {initiator_name} as a JSON object: {{\"tweet\": \"message text\", \"impact_score\": 0}}"}
                 ],
-                max_tokens=200,
-                temperature=0.9,
-                response_format={"type": "json_object"},
-                extra_headers={
-                    "HTTP-Referer": "https://twitlife.vercel.app",
-                    "X-Title": "TwitLife"
-                }
+                max_tokens=150,
+                temperature=0.9
             )
-            ai_data = json.loads(response.choices[0].message.content.strip())
-            ai_text = ai_data.get("dm_text", "")
-            
+            raw = response.choices[0].message.content
+            cleaned = raw.replace("```json", "").replace("```", "").strip()
+            data = json.loads(cleaned)
+
+            dm_text = data.get("tweet", "")
+            if not dm_text: return None
+
             dm_event = Event(
                 id=str(uuid.uuid4()),
                 type="dm",
-                content=ai_text,
+                content=f"[DM to @{initiator_name}] {dm_text}",
                 initiator_id=npc_id,
                 visibility="Private",
                 target_ids=[trigger_event.initiator_id]
             )
+            print(f"[DM SENT] @{npc.name} -> @{initiator_name}: '{dm_text}'")
             return dm_event
         except Exception as e:
             print(f"[ENGINE] DM Generation Failed: {e}")
@@ -1415,8 +1410,6 @@ You MUST output a valid JSON object matching this schema exactly:
         """
         Forces an NPC to construct an original thread/post regarding a specific topic.
         """
-        if not groq_client: return None
-        
         system_prompt = self.generate_llm_prompt_for_entity(npc.id)
         
         prompt = f"""
@@ -1625,13 +1618,9 @@ You MUST output a valid JSON object matching this schema exactly:
 
     def generate_npc_reaction(self, npc_id: str, trigger_event: Event) -> Optional[Event]:
         '''
-        Calls the Groq API to generate a reaction to a specific trigger event.
+        Calls the LLM / Procedural generator to generate a reaction to a specific trigger event.
         Phase 19: Rate-limited to prevent Faction Wars from exhausting daily budget.
         '''
-        if not groq_client:
-            print("[ENGINE] Groq client not initialized. Cannot generate reaction.")
-            return None
-        
         # Phase 19: Rate limit check before calling LLM
         can_go, reason = self.rate_limiter.can_proceed(estimated_tokens=300)
         if not can_go:
