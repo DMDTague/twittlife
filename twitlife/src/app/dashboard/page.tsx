@@ -192,7 +192,6 @@ export default function TwitLife() {
           }
         });
         if (res.status === 404) {
-          console.error("Identity not found in backend. Resetting session.");
           localStorage.removeItem("twitlife_identity");
           setIdentity(null);
           return;
@@ -223,7 +222,7 @@ export default function TwitLife() {
           setPlayerProfile((prev: any) => ({ ...prev, monthly_income_breakdown: data.monthly_income_breakdown }));
         }
       } catch (e) {
-        console.error("Simulation offline or fetch error:", e);
+        // Silently fallback when simulation is offline
       } finally {
         setLoading(false);
       }
@@ -231,26 +230,32 @@ export default function TwitLife() {
 
     fetchTimeline();
 
-    // Fixed: Use production WebSocket URL instead of localhost
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = API.replace('https://', '').replace('http://', '');
-    const wsUrl = `${protocol}//${host}/ws/timeline`;
-    const ws = new WebSocket(wsUrl);
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "new_event") {
-          setEvents(prev => {
-            if (prev.some(p => p.id === data.payload.id)) return prev;
-            return [data.payload, ...prev];
-          });
-        }
-      } catch (e) {
-        console.error("WS parse error", e);
+    // WebSocket timeline stream (optional real-time updates)
+    let ws: WebSocket | null = null;
+    try {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = API.replace('https://', '').replace('http://', '');
+      const wsUrl = `${protocol}//${host}/ws/timeline`;
+      ws = new WebSocket(wsUrl);
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "new_event") {
+            setEvents(prev => {
+              if (prev.some(p => p.id === data.payload.id)) return prev;
+              return [data.payload, ...prev];
+            });
+          }
+        } catch {}
+      };
+      ws.onerror = () => {};
+    } catch {}
+
+    return () => {
+      if (ws) {
+        try { ws.close(); } catch {}
       }
     };
-    ws.onerror = (err) => console.error("WS connection error:", err);
-    return () => { ws.close(); };
   }, [identity]);
 
   useEffect(() => {
