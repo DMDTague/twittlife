@@ -285,6 +285,43 @@ class PostTweetRequest(BaseModel):
     reply_to_id: Optional[str] = None
     media_url: Optional[str] = None
 
+AUTHENTIC_DISPLAY_HANDLES = [
+    ("Danny V.", "danny_delco"),
+    ("Chloe M.", "chloe_philly"),
+    ("Kevin K.", "kev_tech"),
+    ("Marcus S.", "marcus_septa"),
+    ("Rachel R.", "rachel_ritt"),
+    ("Tony B.", "tony_birds"),
+    ("Sarah M.", "sarah_mainline"),
+    ("Alex T.", "alex_startup"),
+    ("Fiona F.", "fiona_fishtown"),
+    ("Sam P.", "sam_philly"),
+    ("Tyler T.", "tyler_temple"),
+    ("Dave D.", "dave_drexel"),
+    ("Nina N.", "nolibs_nina"),
+    ("Nick N.", "northeast_nick"),
+    ("Sal S.", "southphilly_sal"),
+    ("Maya P.", "maya_passyunk"),
+    ("Chris K.", "chris_kensington"),
+    ("Jordan W.", "jordan_westphilly"),
+    ("Taylor S.", "taylor_stan1989"),
+    ("Ray R.", "ray_readingterm")
+]
+
+def format_entity_display(entity_id: str, entity_obj=None):
+    if not entity_id:
+        return "player_1", "Protagonist"
+    if entity_obj and getattr(entity_obj, "is_player", False):
+        return entity_id, entity_obj.name
+    if entity_id.startswith("bot_") or (entity_obj and entity_obj.name.startswith("User")):
+        idx = abs(hash(entity_id)) % len(AUTHENTIC_DISPLAY_HANDLES)
+        disp_name, disp_handle = AUTHENTIC_DISPLAY_HANDLES[idx]
+        if entity_obj:
+            entity_obj.name = disp_name
+        return disp_handle, disp_name
+    name = entity_obj.name if entity_obj else entity_id.replace("_", " ").title()
+    return entity_id, name
+
 @app.get("/api/timeline")
 def get_timeline(entity_id: str = "player_1"):
     """
@@ -303,7 +340,7 @@ def get_timeline(entity_id: str = "player_1"):
     feed = []
     for ev in main_feed_timeline:
         initiator = state.entities.get(ev.initiator_id)
-        name = initiator.name if initiator else "Unknown"
+        handle, name = format_entity_display(ev.initiator_id, initiator)
         archetype = initiator.archetype if initiator else ""
         # Count replies to this event
         replies_count = sum(1 for e in state.events if getattr(e, 'reply_to_id', None) == ev.id)
@@ -311,7 +348,7 @@ def get_timeline(entity_id: str = "player_1"):
             "id": ev.id,
             "type": ev.type,
             "content": ev.content,
-            "initiator_id": ev.initiator_id,
+            "initiator_id": handle,
             "initiator_name": name,
             "initiator_archetype": archetype,
             "is_verified": getattr(initiator, "is_verified", False),
@@ -405,7 +442,7 @@ def _build_thread_response(tweet_id: str):
         )
     
     initiator = state.entities.get(parent.initiator_id)
-    name = initiator.name if initiator else (parent.initiator_id.replace("_", " ").title() if parent.initiator_id else "Protagonist")
+    handle, name = format_entity_display(parent.initiator_id, initiator)
     archetype = initiator.archetype if initiator else "The Protagonist"
     
     # Gather all replies
@@ -413,14 +450,14 @@ def _build_thread_response(tweet_id: str):
     for ev in state.events:
         if getattr(ev, 'reply_to_id', None) == tweet_id:
             rep_initiator = state.entities.get(ev.initiator_id)
-            rep_name = rep_initiator.name if rep_initiator else "NPC"
+            rep_handle, rep_name = format_entity_display(ev.initiator_id, rep_initiator)
             rep_arch = rep_initiator.archetype if rep_initiator else ""
             sub_replies_count = sum(1 for e in state.events if getattr(e, 'reply_to_id', None) == ev.id)
             replies.append({
                 "id": ev.id,
                 "type": ev.type,
                 "content": ev.content,
-                "initiator_id": ev.initiator_id,
+                "initiator_id": rep_handle,
                 "initiator_name": rep_name,
                 "initiator_archetype": rep_arch,
                 "is_verified": getattr(rep_initiator, "is_verified", False),
@@ -440,7 +477,7 @@ def _build_thread_response(tweet_id: str):
             "id": parent.id,
             "type": parent.type,
             "content": parent.content,
-            "initiator_id": parent.initiator_id,
+            "initiator_id": handle,
             "initiator_name": name,
             "initiator_archetype": archetype,
             "is_verified": getattr(initiator, "is_verified", False),
